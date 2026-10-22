@@ -1,0 +1,6 @@
+{"device":{"name":"/dev/sdb","type":"sat","protocol":"ATA"},"model_name":"ST1000DM010-2EP102",
+ "smart_status":{"passed":true},
+ "ata_smart_attributes":{"table":[{"id":5,"name":"Reallocated_Sector_Ct","value":60,"raw":{"value":1784}},
+   {"id":187,"name":"Reported_Uncorrect","value":63,"raw":{"value":37}},
+   {"id":197,"name":"Current_Pending_Sector","value":100,"raw":{"value":96}}]},
+ "power_on_time":{"hours":41200},"temperature":{"current":52}}

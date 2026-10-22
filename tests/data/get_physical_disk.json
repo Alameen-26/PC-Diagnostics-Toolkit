@@ -1,0 +1,3 @@
+{"disks":[{"DeviceId":"0","FriendlyName":"Samsung SSD 980 PRO 1TB","Model":"Samsung SSD 980 PRO 1TB","MediaType":"SSD","BusType":"NVMe","HealthStatus":"Healthy","Size":1000204886016,"Wear":3,"Temperature":38,"PowerOnHours":1520,"ReadErrorsTotal":0,"ReadErrorsUncorrected":0},
+{"DeviceId":"1","FriendlyName":"ST1000DM010-2EP102","Model":"ST1000DM010-2EP102","MediaType":"HDD","BusType":"SATA","HealthStatus":"Unhealthy","Size":1000204886016,"Wear":0,"Temperature":51,"PowerOnHours":41200,"ReadErrorsTotal":5120,"ReadErrorsUncorrected":37}],
+"partitions":[{"DriveLetter":"C","DiskNumber":0},{"DriveLetter":"D","DiskNumber":1}]}
