@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trimmed sample of "powercfg /batteryreport /xml" output (Windows 11). -->
+<BatteryReport xmlns="http://schemas.microsoft.com/battery/2012">
+  <ReportInformation><ReportVersion>1</ReportVersion><LocalScanTime>2026-10-22T10:00:00</LocalScanTime></ReportInformation>
+  <SystemInformation><ComputerName>OLD-LAPTOP</ComputerName></SystemInformation>
+  <Batteries>
+    <Battery>
+      <Id>DELL 1VX1H63</Id>
+      <Manufacturer>SMP</Manufacturer>
+      <SerialNumber>1234</SerialNumber>
+      <Chemistry>LiP</Chemistry>
+      <LongTerm>1</LongTerm>
+      <DesignCapacity>41000</DesignCapacity>
+      <FullChargeCapacity>18450</FullChargeCapacity>
+      <CycleCount>870</CycleCount>
+    </Battery>
+  </Batteries>
+</BatteryReport>
