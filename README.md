@@ -1,8 +1,8 @@
 <!-- Added in v0.2.0: "Made by NiyiSoft" mark (switches to the light version in dark mode) -->
 <p align="right">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/niyisoft-badge-light.png">
-    <img src="docs/brand/niyisoft-badge.png" alt="Made by NiyiSoft" width="140">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/niyisoft-badge-light.svg">
+    <img src="docs/brand/niyisoft-badge.svg" alt="Made by NiyiSoft" width="140">
   </picture>
 </p>
 
@@ -157,8 +157,6 @@ commands, so check them before sharing.
 
 ## Roadmap
 
-<!-- Changed in v0.2.0: roadmap rewritten from the research on the history of PC diagnostic tools.
-     Full plan: /workspace/shared/UPGRADE_PLAN.md -->
 One release every two months. The old roadmap items are folded into the releases below.
 
 - **v0.3.0 (November 2026) - Make my PC better without buying a new one:** one free -> cheap -> replace

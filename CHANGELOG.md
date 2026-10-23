@@ -57,8 +57,9 @@ All notable changes to this project are documented here.
   It is not fixed-position, so it never covers the report or prints over tables. Markdown report: a
   right-aligned "Made by NiyiSoft" line at the end. Terminal: the scan header reads
   "PC Diagnostics Toolkit <version> - Made by NiyiSoft" (still ASCII only). README: mark at the top.
-  New `pcdiag/report/brand.py`; images in `pcdiag/report/assets/` (packaged via `package-data`) and
-  `docs/brand/`, about 6 KB each. Tests: `tests/test_brand.py` (5 tests); the self-contained check in
+  New `pcdiag/report/brand.py`; the badge PNGs (about 6 KB each) are stored as base64 text in
+  `pcdiag/report/niyisoft_badge_data.py` and, for the README, as SVG wrappers in `docs/brand/`, so the
+  repo has no binary files and can be pushed through the GitHub API. Tests: `tests/test_brand.py` (5 tests); the self-contained check in
   `tests/test_report.py` now allows only embedded `data:` image sources.
 - Docs: Roadmap rewritten for v0.3.0-v0.6.0 (bi-monthly) from the PC-diagnostics history research.
 
