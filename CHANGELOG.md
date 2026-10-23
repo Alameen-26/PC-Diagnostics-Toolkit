@@ -9,6 +9,59 @@ All notable changes to this project are documented here.
   install, tests, scan options, where reports go, when to use Administrator, demos and compare.
   It replaces the old Quick start and "Where reports go" sections.
 
+## v0.2.0 (in progress)
+
+- Live monitoring (roadmap phase 2): new `pcdiag monitor` command samples CPU (overall and per core),
+  RAM, swap, free space on every fixed drive, disk I/O and busy %, CPU temperature (where psutil exposes it;
+  not on Windows) and the top processes by CPU and memory every `--interval` seconds (default 2, minimum 0.5)
+  for `--duration` seconds (default 60; 0 runs until Ctrl+C). It shows a live view that redraws in place
+  (one line per reading when output isn't a terminal), then a summary with average, p95, peak, % of time at or
+  above the threshold, longest stretch, and the busiest programs. It saves `reports/monitor-YYYYmmdd-HHMMSS.json`
+  (`--no-save` to skip, `--json` prints the session instead, `--output-dir DIR`, `--top N`).
+- Terminal: when a snapshot has monitor data, scan/demo print an "Over time" block listing the sustained findings.
+- Ctrl+C stops monitoring early and keeps the readings taken so far (the session is marked `interrupted`).
+- Unavailable data is never a 0: a reading that fails or isn't supported is `None`, with a plain-language note
+  on the sample and the session (e.g. no page file, CPU temperature not exposed, processes hidden by
+  access denied - run as Administrator to include them).
+- `scan --monitor S` (e.g. `scan --monitor 300`) watches the PC for S seconds before the normal scan and stores
+  the session in the snapshot; `--monitor-interval` sets the spacing. The analysis' sustained-pressure checks and
+  the report's "Over time" section use it.
+- Models: `DiskUsageSample`, `MonitorSample`, `MonitorSession` (stats helpers `mean`, `min`, `max`, `p95`,
+  `percent_above`, `longest_streak_above`, `stats`, `process_summary`; JSON round-trip), `MetricStats`,
+  `ProcessSummary`, and the optional `SystemSnapshot.monitor` field. Old snapshot files without it still load.
+- Sampler (`pcdiag/monitor.py`): `Monitor` / `run_monitor()`, with injectable psutil and clocks for testing.
+- Fixtures: example monitor sessions for the three demo PCs (`ALL_MONITOR_FIXTURES`, `with_monitor(name)`),
+  kept separate so the plain fixtures still have no monitor data. `demo <fixture> --monitor` uses them.
+- Tests: `tests/test_monitor.py` (36 tests).
+- Analysis: sustained-pressure checks in `pcdiag/analysis/sustained.py` read `scan --monitor` samples and tell
+  brief spikes from sustained load. New findings: `memory.sustained` (RAM above 85% for at least 50% of the
+  time or p95 at 90%+ is a warning; 20-50% of the time is info), `cpu.sustained` (90%+ for at least 50% of the
+  time or one unbroken 60 s streak is a warning; bursts are info; spikes are info; names the top processes),
+  `storage.disk_filling` (steady fall in free space of at least 0.5 GB with R^2 >= 0.7 over at least 60 s;
+  projected full within 1 h is critical, within 24 h is a warning, otherwise info), and optionally
+  `storage.disk_busy_sustained` and `thermal.cpu_sustained` when those samples have readings.
+- Analysis: confidence comes from the monitor window: under 60 s or under 10 readings is low, 1-5 min is
+  medium, 5 min or more is high. Every sustained finding's evidence holds the duration, sample count, mean,
+  max, p95, % above threshold, longest streak and a plain-language uncertainty note.
+- Analysis: no double-reporting. On a medium or high confidence window, a sustained finding supersedes
+  `memory.pressure`, `cpu.busy`, `storage.disk_busy` or `thermal.cpu`. On a low-confidence window, its stats are
+  merged into the snapshot finding instead. Without monitor data, no sustained findings are produced.
+- Analysis: the RAM upgrade advice and the HDD-to-SSD evidence also use the sustained findings.
+- Report: new "Over time" section (HTML and Markdown) with the monitor window, per-metric mean/p95/max/%
+  above threshold, self-contained SVG (HTML) or text (Markdown) sparklines for CPU and RAM, and the
+  confidence in plain words. Without monitor data it explains how to run `pcdiag scan --monitor 300`.
+- Tests: `tests/test_sustained.py` (47 tests).
+- Branding: small "Made by NiyiSoft" mark (calligraphic, crown above "Made by" and "NiyiSoft").
+  HTML report: bottom-right after the last section, 140 px wide, embedded as data URIs so the report
+  stays one self-contained file (navy version, cream version in dark mode; alt text "Made by NiyiSoft").
+  It is not fixed-position, so it never covers the report or prints over tables. Markdown report: a
+  right-aligned "Made by NiyiSoft" line at the end. Terminal: the scan header reads
+  "PC Diagnostics Toolkit <version> - Made by NiyiSoft" (still ASCII only). README: mark at the top.
+  New `pcdiag/report/brand.py`; images in `pcdiag/report/assets/` (packaged via `package-data`) and
+  `docs/brand/`, about 6 KB each. Tests: `tests/test_brand.py` (5 tests); the self-contained check in
+  `tests/test_report.py` now allows only embedded `data:` image sources.
+- Docs: Roadmap rewritten for v0.3.0-v0.6.0 (bi-monthly) from the PC-diagnostics history research.
+
 ## v0.1.0 (2026-10-22)
 
 First release.

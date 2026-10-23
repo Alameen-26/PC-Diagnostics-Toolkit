@@ -1,3 +1,11 @@
+<!-- Added in v0.2.0: "Made by NiyiSoft" mark (switches to the light version in dark mode) -->
+<p align="right">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/niyisoft-badge-light.png">
+    <img src="docs/brand/niyisoft-badge.png" alt="Made by NiyiSoft" width="140">
+  </picture>
+</p>
+
 # PC Diagnostics Toolkit
 
 A Python tool that explains **what is slowing a PC down**, spots **likely hardware faults**
@@ -30,7 +38,7 @@ and run `.\.venv\Scripts\Activate.ps1` before using the tool.
 pytest -q
 ```
 
-You should see about 149 tests pass.
+You should see about 232 tests pass.
 
 **3. Scan your PC**
 
@@ -39,6 +47,7 @@ python -m pcdiag scan               # normal scan, about 5 s
 python -m pcdiag scan --benchmark   # also run a ~20 s speed test
 python -m pcdiag scan --quick       # faster, noisier sampling; skips smartctl
 python -m pcdiag scan --json > snap.json   # raw data only, saves no report files
+python -m pcdiag scan --monitor 300 # watch the PC for 5 minutes first, then scan
 ```
 
 `pcdiag` on its own is a shortcut for `python -m pcdiag scan`. Other scan options:
@@ -77,6 +86,21 @@ python -m pcdiag compare reports\snapshot-20261001-090000.json reports\snapshot-
 ```
 
 Use your own file names from the `reports` folder: older scan first, newer scan second.
+
+**7. Watch your PC live** (CPU, RAM, disk space and the busiest programs, refreshed every 2 s)
+
+```powershell
+python -m pcdiag monitor                    # 60 s, then a summary
+python -m pcdiag monitor --duration 0       # run until you press Ctrl+C
+python -m pcdiag monitor --duration 300 --interval 5
+python -m pcdiag demo slow_old_laptop --monitor   # example report with 5 minutes of readings
+```
+
+Each run saves `reports\monitor-YYYYmmdd-HHMMSS.json` (`--no-save` to skip, `--json` to print it).
+Readings Windows can't provide (for example CPU temperature) show as "unavailable", never as 0.
+Run PowerShell as Administrator to include system processes in the busiest-programs list.
+`scan --monitor 300` is the best way to catch problems that come and go: the report then tells
+short spikes apart from constant load.
 
 ## Features
 
@@ -133,13 +157,22 @@ commands, so check them before sharing.
 
 ## Roadmap
 
-- Soldered vs socketed RAM detection (so we don't suggest adding RAM to a laptop that can't take it)
-- Desktop vs "no battery detected" detection
-- Averaging readings over time (several samples instead of one snapshot)
-- Latest-GPU-driver check (compare against the vendor's current release)
-- Windows power plan check (e.g. "Power saver" on a desktop)
-- Pending Windows updates
-- CPU-sensor flag on temperature readings (tell CPU sensors apart from board/ACPI zones)
+<!-- Changed in v0.2.0: roadmap rewritten from the research on the history of PC diagnostic tools.
+     Full plan: /workspace/shared/UPGRADE_PLAN.md -->
+One release every two months. The old roadmap items are folded into the releases below.
+
+- **v0.3.0 (November 2026) - Make my PC better without buying a new one:** one free -> cheap -> replace
+  plan; upgrade compatibility (soldered vs socketed RAM, max RAM, free slots, desktop vs no battery);
+  guided troubleshooting by symptom; CPU-sensor flag on temperatures and a GPU-driver age check.
+- **v0.4.0 (January 2027) - Remember and hand off:** automatic scan history and baselines
+  ("what changed since last time"); an IT-support ticket export; optional post-scan feedback saved
+  locally; a portable `.exe` with a checksum.
+- **v0.5.0 (March 2027) - Show the working:** a "Why this score" breakdown with per-area
+  subscores, `METHODOLOGY.md` and a no-scareware charter; crash evidence from the Event Log and
+  Reliability Monitor, with a memory-test hint; a benchmark context guard (battery, power plan,
+  pending Windows updates); `--redact`, `NO_COLOR`/`--plain` and accessibility fixes.
+- **v0.6.0 (May 2027) - See it at a glance:** a local, offline dashboard with history charts; an
+  optional short stress and throttle test; a multi-PC summary from a folder of snapshots.
 
 ## License
 
