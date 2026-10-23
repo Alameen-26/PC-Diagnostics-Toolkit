@@ -5,15 +5,16 @@ Values are realistic for the hardware described. Benchmark numbers are on
 an illustrative scale and are not calibrated against ``pcdiag.benchmark``
 (real runs score lower; compare real runs only with real runs).
 
-Added in v0.1.0
+Added in v0.1.0. v0.2.0 added example monitor sessions (``ALL_MONITOR_FIXTURES``,
+``with_monitor``) for ``pcdiag demo <name> --monitor``.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .models import (
-    BatteryInfo, BenchmarkResult, CPUInfo, DiskInfo, DiskIOStats, DiskKind,
-    GPUInfo, MemoryInfo, MemoryModule, OSInfo, ProcessInfo, SmartHealth,
+    BatteryInfo, BenchmarkResult, CPUInfo, DiskInfo, DiskIOStats, DiskKind, DiskUsageSample,
+    GPUInfo, MemoryInfo, MemoryModule, MonitorSample, MonitorSession, OSInfo, ProcessInfo, SmartHealth,
     SmartStatus, StartupItem, SystemSnapshot, TemperatureReading,
 )
 
@@ -137,3 +138,133 @@ ALL_FIXTURES = {
     "slow_old_laptop": slow_old_laptop,
     "failing_disk_machine": failing_disk_machine,
 }
+
+
+# ---------------------------------------------------------------------------
+# Example monitor sessions (``pcdiag demo <name> --monitor``)
+# Added in v0.2.0 (roadmap phase 2). Kept separate from the snapshot
+# fixtures above on purpose: those stay "single reading only" so tests (and
+# the report's "run scan --monitor 300" hint) cover the no-monitor path.
+# Values are generated from simple deterministic patterns (no randomness),
+# so the demo output and tests are reproducible.
+# ---------------------------------------------------------------------------
+
+def _wave(i: int, period: int, amplitude: float) -> float:
+    """Deterministic triangle wave in [-amplitude, +amplitude] (stands in for noise)."""
+    phase = (i % period) / period
+    return amplitude * (4 * abs(phase - 0.5) - 1)
+
+
+def _session(snap: SystemSnapshot, *, seconds: int = 300, interval: float = 2.0,
+             cpu, ram, swap, sys_free, busy, temp, top_cpu, top_mem, notes=()) -> MonitorSession:
+    """Build a MonitorSession that ends when ``snap`` was taken.
+
+    ``cpu``, ``ram`` ... are functions of the sample index returning the value
+    (or None for "no reading"). Disk totals come from the snapshot's system drive.
+    """
+    drive = snap.system_drive
+    total = drive.total_gb if drive else None
+    mount = drive.mountpoint if drive else "C:\\"
+    n = int(seconds / interval)
+    start = snap.timestamp - timedelta(seconds=seconds)
+    samples = []
+    for i in range(n):
+        free = sys_free(i)
+        used = None if free is None or not total else round(100.0 * (total - free) / total, 1)
+        ram_pct = ram(i)
+        ram_total = snap.memory.total_gb if snap.memory and snap.memory.total_gb else None
+        samples.append(MonitorSample(
+            timestamp=start + timedelta(seconds=(i + 1) * interval), elapsed_seconds=(i + 1) * interval,
+            cpu_percent=cpu(i), ram_percent=ram_pct,
+            ram_used_gb=round(ram_total * ram_pct / 100, 2) if ram_total and ram_pct is not None else None,
+            ram_available_gb=round(ram_total * (100 - ram_pct) / 100, 2) if ram_total and ram_pct is not None else None,
+            swap_percent=swap(i),
+            disks=[DiskUsageSample(mountpoint=mount, total_gb=total, free_gb=free, used_percent=used)],
+            system_disk_free_gb=free, system_disk_used_percent=used,
+            disk_read_mbps=2.0, disk_write_mbps=1.0, disk_busy_percent=busy(i), cpu_temp_c=temp(i),
+            top_cpu=top_cpu(i), top_memory=top_mem(i), notes=list(notes),
+        ))
+    return MonitorSession(started_at=start, ended_at=snap.timestamp, interval_seconds=interval,
+                          requested_duration_seconds=float(seconds),
+                          hostname=snap.os.hostname if snap.os else None,
+                          logical_cores=snap.cpu.logical_cores if snap.cpu else None,
+                          ram_total_gb=snap.memory.total_gb if snap.memory else None,
+                          samples=samples, notes=list(notes))
+
+
+def _clamp(v: float) -> float:
+    """Keep a generated percentage within 0-100, one decimal."""
+    return round(max(0.0, min(100.0, v)), 1)
+
+
+def slow_old_laptop_monitor() -> MonitorSession:
+    """5 minutes on the old laptop: RAM pinned ~92%, CPU spiking to 100% in bursts, HDD busy, running hot."""
+    snap = slow_old_laptop()
+    chrome = lambda i: ProcessInfo(pid=5120, name="chrome.exe", cpu_percent=round(60 + _wave(i, 9, 25), 1),  # noqa: E731
+                                   memory_mb=round(1350 + _wave(i, 30, 40), 1), memory_percent=33.0)
+    defender = lambda i: ProcessInfo(pid=2212, name="MsMpEng.exe",  # noqa: E731
+                                     cpu_percent=110.0 if i % 40 < 12 else 8.0, memory_mb=310.0, memory_percent=7.6)
+    onedrive = ProcessInfo(pid=6004, name="OneDrive.exe", cpu_percent=9.0, memory_mb=160.0, memory_percent=3.9)
+    return _session(
+        snap,
+        # Busy baseline (~70%) with a Defender scan burst pegging the CPU for
+        # 24 s out of every 80 s: spikes, plus about 30% of the time >= 90%.
+        cpu=lambda i: 100.0 if i % 40 < 12 else _clamp(70 + _wave(i, 7, 8)),
+        ram=lambda i: _clamp(92 + _wave(i, 11, 2.5)),          # 89.5-94.5%: sustained
+        swap=lambda i: _clamp(66 + _wave(i, 25, 2)),
+        sys_free=lambda i: round(23.2 - 0.0008 * i, 2),        # tiny drift: noise, not "filling"
+        busy=lambda i: _clamp(95 + _wave(i, 6, 5)),            # HDD at 90-100% active time
+        temp=lambda i: round(84.0 if i % 40 < 12 else 79 + _wave(i, 10, 2), 1),
+        top_cpu=lambda i: sorted([chrome(i), defender(i), onedrive], key=lambda p: p.cpu_percent or 0, reverse=True),
+        top_mem=lambda i: [chrome(i), defender(i), onedrive],
+    )
+
+
+def healthy_gaming_pc_monitor() -> MonitorSession:
+    """5 calm minutes on the gaming PC: nothing sustained."""
+    snap = healthy_gaming_pc()
+    steam = ProcessInfo(pid=4120, name="steam.exe", cpu_percent=1.5, memory_mb=420.0, memory_percent=1.3)
+    discord = ProcessInfo(pid=8812, name="Discord.exe", cpu_percent=0.8, memory_mb=380.0, memory_percent=1.2)
+    return _session(
+        snap,
+        cpu=lambda i: _clamp(12 + _wave(i, 13, 6) + (40 if i == 60 else 0)),  # one brief spike
+        ram=lambda i: _clamp(30 + _wave(i, 17, 1.5)),
+        swap=lambda i: 2.5,
+        sys_free=lambda i: 1243.0,
+        busy=lambda i: _clamp(3 + _wave(i, 9, 2)),
+        temp=lambda i: round(48 + _wave(i, 15, 3), 1),
+        top_cpu=lambda i: [steam, discord], top_mem=lambda i: [steam, discord],
+    )
+
+
+def failing_disk_machine_monitor() -> MonitorSession:
+    """5 minutes on the office PC: load is fine; temperatures unreadable (None), as on many Windows PCs."""
+    snap = failing_disk_machine()
+    indexer = ProcessInfo(pid=900, name="SearchIndexer.exe", cpu_percent=6.0, memory_mb=95.0, memory_percent=0.6)
+    return _session(
+        snap,
+        cpu=lambda i: _clamp(20 + _wave(i, 11, 8)),
+        ram=lambda i: _clamp(44 + _wave(i, 19, 2)),
+        swap=lambda i: 12.0,
+        sys_free=lambda i: 266.0,
+        # Busy % is the busiest disk: the failing D: drive retrying reads.
+        busy=lambda i: _clamp(96 + _wave(i, 5, 3)) if i % 30 < 20 else _clamp(40 + _wave(i, 5, 10)),
+        temp=lambda i: None,
+        top_cpu=lambda i: [indexer], top_mem=lambda i: [indexer],
+        notes=("CPU temperature not monitored on Windows (no live sensor access without extra drivers)",),
+    )
+
+
+#: fixture name -> example monitor session. Added in v0.2.0.
+ALL_MONITOR_FIXTURES = {
+    "healthy_gaming_pc": healthy_gaming_pc_monitor,
+    "slow_old_laptop": slow_old_laptop_monitor,
+    "failing_disk_machine": failing_disk_machine_monitor,
+}
+
+
+def with_monitor(name: str) -> SystemSnapshot:
+    """Snapshot fixture ``name`` with its example monitor session attached. Added in v0.2.0."""
+    snap = ALL_FIXTURES[name]()
+    snap.monitor = ALL_MONITOR_FIXTURES[name]()
+    return snap
