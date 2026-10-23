@@ -19,6 +19,10 @@ pcdiag = "pcdiag.__main__:main"
 [tool.setuptools.packages.find]
 include = ["pcdiag*"]
 
+# Added in v0.2.0: ship the NiyiSoft badge PNGs embedded in HTML reports.
+[tool.setuptools.package-data]
+"pcdiag.report" = ["assets/*.png"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

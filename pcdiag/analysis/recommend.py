@@ -1,6 +1,7 @@
 # pcdiag/analysis/recommend.py
 # Added in v0.1.0
 # Changed in v0.1.0 (follow-up): OS-neutral wording in reasons.
+# Changed in v0.2.0: sustained memory/disk-busy findings count as evidence.
 """Upgrade recommender: which purchase would actually help this PC?
 
 ``recommend_upgrades`` reads the snapshot plus the findings from ``analyze``
@@ -108,7 +109,9 @@ def recommend_upgrades(snapshot: SystemSnapshot, findings: list[Finding]) -> lis
         need_gb = sd.used_gb if sd and sd.used_gb is not None else None
         size_hint = ("a 1 TB SSD" if need_gb and need_gb > 350 else "a 500 GB SSD")
         cost = CostTier.MEDIUM if need_gb and need_gb > 350 else CostTier.LOW
-        related = [hdd.id] + _ids(findings, "storage.disk_busy") + _ids(findings, "storage.system_disk_full")
+        # Changed in v0.2.0: the over-time disk-busy finding counts as evidence too.
+        related = ([hdd.id] + _ids(findings, "storage.disk_busy") + _ids(findings, "storage.disk_busy_sustained")
+                   + _ids(findings, "storage.system_disk_full"))
         recs.append(Recommendation(
             title="Replace the system hard drive with an SSD",
             expected_impact=IMPACT_HDD_TO_SSD,
@@ -120,7 +123,9 @@ def recommend_upgrades(snapshot: SystemSnapshot, findings: list[Finding]) -> lis
 
     # --- 3. RAM -------------------------------------------------------------
     low_ram = _first(findings, "memory.low_total")
-    pressure = _first(findings, "memory.pressure")
+    # Changed in v0.2.0: when monitor data exists, "memory.sustained"
+    # replaces "memory.pressure", so either one counts as memory pressure.
+    pressure = _first(findings, "memory.sustained") or _first(findings, "memory.pressure")
     if low_ram and low_ram.is_problem:
         m = snapshot.memory
         slot_text = ""
