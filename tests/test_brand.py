@@ -43,9 +43,10 @@ def test_dark_mode_variant_is_hidden_from_screen_readers():
     assert "prefers-color-scheme: dark){.brand .on-light{display:none}" in html
 
 
-def test_fallback_to_text_when_assets_missing(monkeypatch, tmp_path):
+def test_fallback_to_text_when_assets_missing(monkeypatch):
+    # Changed in v0.2.0: the badge is base64 text in a module, so "missing" means no data module.
     brand._data_uri.cache_clear()
-    monkeypatch.setattr(brand, "_ASSETS", tmp_path)
+    monkeypatch.setattr(brand, "_badge_data", None)
     try:
         out = brand.brand_html()
         assert 'data-brand="text"' in out and "Made by NiyiSoft" in out and "<img" not in out
