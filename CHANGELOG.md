@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+- Docs: Quick start section added to the top of the README (2026-10-23). Step-by-step Windows
+  PowerShell guide: prerequisites, clone, virtual environment (with the execution-policy tip),
+  install, tests, scan options, where reports go, when to use Administrator, demos and compare.
+  It replaces the old Quick start and "Where reports go" sections.
+
 ## v0.1.0 (2026-10-22)
 
 First release.

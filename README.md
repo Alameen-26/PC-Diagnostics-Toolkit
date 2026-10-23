@@ -5,6 +5,79 @@ A Python tool that explains **what is slowing a PC down**, spots **likely hardwa
 help**, with free fixes listed first. Windows first; cross-platform wherever
 [psutil](https://github.com/giampaolo/psutil) allows (tests run on Linux).
 
+## Quick start (Windows PowerShell)
+
+**You need:** [Git](https://git-scm.com/download/win) and [Python 3.10 or newer](https://www.python.org/downloads/)
+(tick "Add python.exe to PATH" in the installer). Open **PowerShell** and paste one block at a time.
+
+**1. Download and install**
+
+```powershell
+git clone https://github.com/Alameen-26/PC-Diagnostics-Toolkit.git
+cd PC-Diagnostics-Toolkit
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+```
+
+If PowerShell refuses to run `Activate.ps1`, run this once and then activate again:
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. Next time, just `cd` into the folder
+and run `.\.venv\Scripts\Activate.ps1` before using the tool.
+
+**2. Run the tests** (optional, checks the install)
+
+```powershell
+pytest -q
+```
+
+You should see about 149 tests pass.
+
+**3. Scan your PC**
+
+```powershell
+python -m pcdiag scan               # normal scan, about 5 s
+python -m pcdiag scan --benchmark   # also run a ~20 s speed test
+python -m pcdiag scan --quick       # faster, noisier sampling; skips smartctl
+python -m pcdiag scan --json > snap.json   # raw data only, saves no report files
+```
+
+`pcdiag` on its own is a shortcut for `python -m pcdiag scan`. Other scan options:
+`--output-dir DIR`, `--no-save` (write no files) and `--bench-disk-mb N` (size of the
+benchmark's temporary file; default 256, 0 skips the disk test).
+
+**4. Open the report**
+
+Each scan saves two files in a `reports` folder inside the folder you ran it from:
+
+- `report-YYYYmmdd-HHMMSS.html`: the readable report; open it in any browser
+- `snapshot-YYYYmmdd-HHMMSS.json`: the raw data, used by `compare` later
+
+```powershell
+start reports
+```
+
+For full drive health (wear, temperature, power-on hours, SMART), run PowerShell with
+**"Run as administrator"**. Without admin those items show as "Can't tell" instead of guessing.
+Battery wear works without admin. Details are in [Which checks need Administrator](#which-checks-need-administrator).
+
+**5. Try the built-in examples** (no scanning; made-up example PCs)
+
+```powershell
+python -m pcdiag demo healthy_gaming_pc
+python -m pcdiag demo slow_old_laptop
+python -m pcdiag demo failing_disk_machine
+```
+
+Each demo prints its findings and saves `reports\report-demo-<name>.html`.
+
+**6. Compare two scans** (e.g. this month vs last month)
+
+```powershell
+python -m pcdiag compare reports\snapshot-20261001-090000.json reports\snapshot-20261101-090000.json
+```
+
+Use your own file names from the `reports` folder: older scan first, newer scan second.
+
 ## Features
 
 - **Live scan** of CPU (model, cores, clocks, ~1 s usage sample), RAM and swap
@@ -24,33 +97,6 @@ help**, with free fixes listed first. Windows first; cross-platform wherever
 - **Optional benchmark** (~10-20 s): CPU single/multi-core, sequential disk read/write and
   memory copy. Scores are **relative**, for comparing your own runs over time.
 - **Compare** two scans (e.g. monthly) to see what got better or worse.
-
-## Quick start (Windows PowerShell)
-
-```powershell
-cd pc-diagnostics-toolkit
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1      # if blocked: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-pip install -e ".[dev]"
-
-pcdiag                            # same as: python -m pcdiag scan
-pcdiag scan --benchmark           # add the ~20 s relative benchmark
-pcdiag scan --json > snap.json    # JSON only, writes no files
-pcdiag demo slow_old_laptop       # try it on a built-in example PC
-pcdiag compare reports\snapshot-20261001-090000.json reports\snapshot-20261101-090000.json
-pytest                            # run the test suite
-```
-
-Other options: `scan --quick` (shorter sampling, skips smartctl), `--output-dir DIR`,
-`--no-save`, and `--bench-disk-mb N` (size of the benchmark's temporary file; default 256,
-0 skips the disk test).
-
-### Where reports go
-
-Each `scan` writes two files to `.\reports\` (relative to where you run it):
-
-- `snapshot-YYYYmmdd-HHMMSS.json`: the raw data, for `pcdiag compare` later
-- `report-YYYYmmdd-HHMMSS.html`: the readable report; open it in any browser
 
 ## Which checks need Administrator
 
