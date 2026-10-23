@@ -1,6 +1,8 @@
 # pcdiag/report/html.py
 # Added in v0.1.0
 # Changed in v0.1.0 (follow-up): raw benchmark section with comparison-only note.
+# Changed in v0.2.0: "Over time" section with inline-SVG sparklines.
+# Changed in v0.2.0: "Made by NiyiSoft" mark in the bottom-right corner (see brand.py).
 """Self-contained HTML report ("My PC Health Report").
 
 Layout, top to bottom:
@@ -11,7 +13,10 @@ Layout, top to bottom:
 4. Fixes: "Free fixes first", then "Upgrades worth buying" (ranked).
 5. Findings grouped by severity, each tagged Confirmed / Possible cause, with
    a "What to do" line.
-6. System overview.
+6. Over time (Added in v0.2.0): monitor window, per-metric stats, CPU/RAM
+   sparklines and the confidence in plain words; or a note on how to get it.
+7. System overview.
+8. Maker's mark (Added in v0.2.0): small "Made by NiyiSoft" badge, bottom right.
 
 Rules for this file:
 * No external assets or scripts; CSS is inline and adapts to dark mode via
@@ -28,9 +33,11 @@ from html import escape
 from ..analysis.findings import Finding, Severity
 from ..analysis.recommend import Recommendation
 from ..models import SystemSnapshot
+from .brand import BRAND_CSS, brand_html  # Added in v0.2.0
 from .summary import (
     BAD, BENCHMARK_NOTE, GOOD, SEVERITY_GROUP_TITLE, STATUS_STYLE, UNKNOWN, WARN, benchmark_rows,
-    evidence_label, free_fixes, group_findings, metric_cards, overview_rows, reading_times, verdict,
+    NO_MONITOR_NOTE, OverTime, evidence_label, free_fixes, group_findings, metric_cards, over_time, overview_rows,
+    reading_times, verdict,
 )
 
 # Verdict light -> card status, so the banner reuses the card styling.
@@ -72,7 +79,74 @@ border-radius:999px;color:var(--c);background:var(--cbg);border:1px solid var(--
 ol,ul{margin:0;padding-left:22px}ol.card{padding-left:40px}li{margin-bottom:8px}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+.spark{display:flex;gap:10px;align-items:center;margin:6px 0}.spark svg{flex:none;width:260px;height:44px;
+background:var(--grey-bg);border-radius:6px}.spark .line{fill:none;stroke:var(--info);stroke-width:1.6}
+.spark .thr{stroke:var(--amber);stroke-width:1;stroke-dasharray:4 3}
 """
+
+
+# --- Over time (Added in v0.2.0) -------------------------------------------
+
+_SPARK_W, _SPARK_H, _SPARK_PAD = 260.0, 44.0, 3.0  # sparkline viewBox size and inner padding
+
+
+def sparkline_svg(label: str, values: list, threshold: float, scale_max: float = 100.0) -> str:
+    """Inline SVG sparkline: no scripts or external assets.
+
+    * The y axis is fixed at 0..``scale_max`` (100 for percentages), so a flat
+      30% line doesn't look like a spike.
+    * ``None`` values are gaps: the line is split there rather than drawn
+      across missing data.
+    * A dashed line marks the threshold. ``role="img"`` with an aria-label and
+      a <title> describes the chart for screen readers; the label is escaped.
+    """
+    n = len(values)
+    def xy(i: int, v: float) -> str:
+        x = _SPARK_PAD + (i / (n - 1) if n > 1 else 0.5) * (_SPARK_W - 2 * _SPARK_PAD)
+        y = _SPARK_H - _SPARK_PAD - (max(0.0, min(v, scale_max)) / scale_max) * (_SPARK_H - 2 * _SPARK_PAD)
+        return f"{x:.1f},{y:.1f}"
+    runs, cur = [], []
+    for i, v in enumerate(values):  # split into runs of consecutive real readings
+        if v is None:
+            if cur:
+                runs.append(cur)
+            cur = []
+        else:
+            cur.append(xy(i, v))
+    if cur:
+        runs.append(cur)
+    lines = "".join(f'<polyline class="line" points="{" ".join(r)}"/>' if len(r) > 1 else
+                    f'<circle cx="{r[0].split(",")[0]}" cy="{r[0].split(",")[1]}" r="1.8" fill="currentColor"/>'
+                    for r in runs)
+    ty = _SPARK_H - _SPARK_PAD - (min(threshold, scale_max) / scale_max) * (_SPARK_H - 2 * _SPARK_PAD)
+    desc = escape(f"{label} over the monitor window; dashed line = {threshold:.0f}% threshold")
+    return (f'<svg viewBox="0 0 {_SPARK_W:.0f} {_SPARK_H:.0f}" role="img" aria-label="{desc}" '
+            f'preserveAspectRatio="none"><title>{desc}</title>'
+            f'<line class="thr" x1="0" x2="{_SPARK_W:.0f}" y1="{ty:.1f}" y2="{ty:.1f}"/>{lines}</svg>')
+
+
+def _over_time_html(ot: OverTime | None) -> list[str]:
+    """HTML for the "Over time" section (or the how-to note when there's no monitor data)."""
+    out = ["<h2>Over time</h2>"]
+    if ot is None:
+        out.append(f'<p class="card" data-monitor="none">{escape(NO_MONITOR_NOTE)}</p>')
+        return out
+    out.append(f'<div class="card" data-monitor="yes" data-confidence="{escape(ot.confidence.lower())}">')
+    out.append(f"<p><strong>Monitor window:</strong> started {escape(ot.start)} · {escape(ot.duration)} · "
+               f"{ot.sample_count} samples</p>")
+    out.append(f"<p><strong>Confidence: {escape(ot.confidence)}.</strong> {escape(ot.explanation)}</p>")
+    for label, values, thr, top in ot.sparklines:
+        out.append(f'<div class="spark">{sparkline_svg(label, values, thr, top)}<span>{escape(label)}</span></div>')
+    if ot.rows:
+        out.append("<table><thead><tr><th>Metric</th><th>Mean</th><th>p95</th><th>Max</th>"
+                   "<th>Time past threshold</th><th>Longest stretch</th><th>Readings</th></tr></thead><tbody>")
+        out.extend(f"<tr><th>{escape(r.label)}</th><td>{escape(r.mean)}</td><td>{escape(r.p95)}</td>"
+                   f"<td>{escape(r.max)}</td><td>{escape(r.above)}</td><td>{escape(r.streak)}</td>"
+                   f"<td>{escape(r.readings)}</td></tr>" for r in ot.rows)
+        out.append("</tbody></table>")
+    out.extend(f'<p class="muted">{escape(n)}</p>' for n in ot.notes)
+    out.append("</div>")
+    return out
 
 
 def _pill(status: str, text: str | None = None) -> str:
@@ -109,7 +183,8 @@ def render_html(snapshot: SystemSnapshot, findings: list[Finding], recs: list[Re
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         '<meta name="color-scheme" content="light dark">',
         f"<title>My PC Health Report: {escape(host)}</title>",
-        f"<style>{_CSS}</style></head><body><main>",
+        # Changed in v0.2.0: BRAND_CSS appended for the NiyiSoft mark.
+        f"<style>{_CSS}{BRAND_CSS}</style></head><body><main>",
         f"<h1>My PC Health Report <span class=\"muted\">· {escape(host)}</span></h1>",
         # 1. Verdict banner. data-light lets tests/tools read the result.
         f'<section class="card banner s-{vst}" data-light="{v.light}" role="status">'
@@ -159,18 +234,25 @@ def render_html(snapshot: SystemSnapshot, findings: list[Finding], recs: list[Re
         p.append(f"<h3>{escape(SEVERITY_GROUP_TITLE[sev])} ({len(items)})</h3>")
         p.extend(_finding(f) for f in items)
 
-    # 6. System overview
+    # 6. Over time (Added in v0.2.0)
+    p.extend(_over_time_html(over_time(snapshot)))
+
+    # 7. System overview
     p.append('<h2>System overview</h2><div class="card"><table><tbody>')
     p.extend(f"<tr><th>{escape(k)}</th><td>{escape(val)}</td></tr>" for k, val in overview_rows(snapshot))
     p.append("</tbody></table></div>")
 
-    # 7. Benchmark (Added in v0.1.0, follow-up): raw numbers only, no colours,
+    # 8. Benchmark (Added in v0.1.0, follow-up): raw numbers only, no colours,
     # because scores are only comparable between runs on the same PC.
     bench = benchmark_rows(snapshot)
     if bench:
         p.append('<h2>Benchmark</h2><div class="card"><table><tbody>')
         p.extend(f"<tr><th>{escape(k)}</th><td>{escape(val)}</td></tr>" for k, val in bench)
         p.append(f'</tbody></table><p class="muted">{escape(BENCHMARK_NOTE)}</p></div>')
+    # Changed in v0.2.0: "Possible cause" may now come from a monitor window, not only a single reading.
     p.append('<p class="muted">Thresholds are rules of thumb. "Confirmed" = measured or reported by the device; '
-             '"Possible cause" = inferred from a single reading. Generated by pcdiag.</p></main></body></html>')
+             '"Possible cause" = inferred, not directly measured. Generated by pcdiag.</p>')
+    # 9. Maker's mark (Added in v0.2.0): bottom-right "Made by NiyiSoft" badge, after all content.
+    p.append(brand_html())
+    p.append("</main></body></html>")
     return "\n".join(p)
