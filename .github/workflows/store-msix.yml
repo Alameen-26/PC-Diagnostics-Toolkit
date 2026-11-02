@@ -22,11 +22,11 @@ on:
       publisher:
         description: "Package/Identity/Publisher from Partner Center (CN=...)"
         required: true
-        default: "CN=00000000-0000-0000-0000-000000000000"
+        default: "CN=F049A4CF-6F01-4D1B-8071-1C2A1E440F71"
       publisher_display_name:
         description: "Package/Properties/PublisherDisplayName from Partner Center"
         required: true
-        default: "NiyiSoft"
+        default: "Niyi Soft"
       version:
         description: "Package version, four numbers, last one 0 (e.g. 0.3.0.0)"
         required: true
@@ -120,7 +120,7 @@ jobs:
               <Resource Language="en-us" />
             </Resources>
             <Applications>
-              <Application Id="PCDiagnosticsToolkit" Executable="pcdiag.exe" EntryPoint="Windows.FullTrustApplication" desktop4:Subsystem="console">
+              <Application Id="PCDiagnosticsToolkit" Executable="pcdiag.exe" EntryPoint="Windows.FullTrustApplication" desktop4:Subsystem="console" desktop4:SupportsMultipleInstances="true">
                 <uap:VisualElements DisplayName="PC Diagnostics Toolkit" Description="Find out what slows your PC down."
                   BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
                   <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
