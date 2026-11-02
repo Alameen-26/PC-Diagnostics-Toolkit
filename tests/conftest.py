@@ -13,6 +13,12 @@ import pytest
 from pcdiag.collectors import _shell
 
 DATA = Path(__file__).parent / "data"
+# Explained in v0.3.0: how these fixtures work. pytest's ``monkeypatch`` swaps a function for
+# a fake for the length of one test and restores it afterwards. The
+# ``windows`` fixture makes the collectors think they are on Windows and makes
+# any real command fail loudly; ``ps_json`` feeds canned PowerShell JSON (real
+# outputs saved in tests/data). That is how Windows-only code is tested on
+# Linux, and why the tests never depend on the machine running them.
 
 # Minimal stand-ins for psutil's named tuples.
 Partition = namedtuple("Partition", "device mountpoint fstype opts")
