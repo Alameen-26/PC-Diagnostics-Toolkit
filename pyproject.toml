@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pcdiag"
-version = "0.3.0"  # Changed in v0.3.0
+version = "1.0.0"  # Changed in v1.0.0
 description = "Explain what slows a PC down, spot likely faults, and recommend upgrades that actually help."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,6 +20,10 @@ pcdiag = "pcdiag.__main__:main"
 include = ["pcdiag*"]
 # Changed in v0.2.0: no package-data needed; the NiyiSoft badge ships as base64 text in
 # pcdiag/report/niyisoft_badge_data.py.
+
+# Added in v1.0.0: the phone and console repair guides ship inside the package.
+[tool.setuptools.package-data]
+"pcdiag.knowledge" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

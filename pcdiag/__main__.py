@@ -36,12 +36,12 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import __version__
+from . import __version__, guides  # guides added in v1.0.0
 from .fixtures import ALL_FIXTURES, with_monitor
 from .models import SystemSnapshot
 from .monitor import DEFAULT_DURATION, DEFAULT_INTERVAL, MIN_INTERVAL  # Added in v0.2.0
 
-SUBCOMMANDS = ("scan", "demo", "compare", "monitor", "plan", "troubleshoot")  # "monitor" added in v0.2.0; "plan", "troubleshoot" in v0.3.0
+SUBCOMMANDS = ("scan", "demo", "compare", "monitor", "plan", "troubleshoot", "guide")  # "monitor" added in v0.2.0; "plan", "troubleshoot" in v0.3.0; "guide" in v1.0.0
 
 
 # ---------------------------------------------------------------------------
@@ -406,7 +406,27 @@ def build_parser() -> argparse.ArgumentParser:
                       help="mark steps using a built-in example PC")
     tsrc.add_argument("--snapshot", metavar="FILE", help="mark steps using a saved snapshot JSON")
     ts.set_defaults(func=cmd_troubleshoot, monitor=None)
+
+    # Added in v1.0.0: repair guides for phones and consoles.
+    gd = sub.add_parser("guide", help="step-by-step repair guides for phones and game consoles")
+    gd.add_argument("device", choices=list(guides.DEVICES), help="phone or console")
+    gd.add_argument("problem", nargs="?", help="which problem (leave out to list them)")
+    gd.set_defaults(func=cmd_guide)
     return p
+
+
+def cmd_guide(args: argparse.Namespace) -> int:
+    """Print a phone or console repair guide, or the list of guides. Added in v1.0.0."""
+    if not args.problem:
+        print(guides.render_list(args.device))
+        return 0
+    try:
+        print(guides.render_guide(args.device, args.problem))
+    except KeyError:
+        print(f"Unknown problem '{args.problem}'. Choose one of: {', '.join(guides.symptom_ids(args.device))}",
+              file=sys.stderr)
+        return 2
+    return 0
 
 
 def main(argv: Optional[list[str]] = None) -> int:
