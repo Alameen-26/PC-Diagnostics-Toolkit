@@ -1,4 +1,4 @@
-# Runs the pytest suite on Windows and Linux.
+# Runs the pytest suite on Windows, Linux and macOS (macOS added in v1.0.0).
 #
 # Why both OSes: the toolkit targets Windows first, but every Windows-only
 # code path must degrade gracefully elsewhere. On windows-latest the live
@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false  # keep the other OS/Python results even if one combination fails
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-latest, macos-latest]  # Changed in v1.0.0: macOS added
         python-version: ["3.10", "3.13"]
     steps:
       - uses: actions/checkout@v4

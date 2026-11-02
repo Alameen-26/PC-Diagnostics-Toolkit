@@ -1,7 +1,7 @@
 # Builds the portable Windows .exe and publishes it as a GitHub Release.
 #
 # Run it from the Actions tab ("Run workflow") with the version, e.g. v0.3.0,
-# or push a tag like v0.4.0. It builds a one-file console app with PyInstaller,
+# or push a tag like v1.1.0. It builds a one-file console app with PyInstaller,
 # smoke-tests it, writes a SHA256 checksum and creates (or updates) the release.
 # Free on public repositories.
 #
@@ -14,7 +14,7 @@ on:
       version:
         description: "Release tag, e.g. v0.3.0"
         required: true
-        default: "v0.3.0"
+        default: "v1.0.0"
   push:
     tags: ["v*"]
 
@@ -44,7 +44,7 @@ jobs:
         run: |
           $name = "PCDiagnosticsToolkit-$env:VERSION-windows-x64"
           pyinstaller --onefile --console --clean --name $name `
-            --collect-submodules pcdiag packaging/exe_launcher.py
+            --collect-submodules pcdiag --collect-data pcdiag packaging/exe_launcher.py
           "EXE_NAME=$name.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Smoke test
@@ -56,6 +56,7 @@ jobs:
           & $exe demo slow_old_laptop --no-save; if ($LASTEXITCODE) { exit 1 }
           & $exe plan --demo failing_disk_machine --no-save; if ($LASTEXITCODE) { exit 1 }
           & $exe scan --quick --json | Out-Null; if ($LASTEXITCODE) { exit 1 }
+          & $exe guide console overheating; if ($LASTEXITCODE) { exit 1 }
 
       - name: Checksum and release notes
         shell: pwsh
