@@ -46,6 +46,20 @@ def is_windows() -> bool:
     return sys.platform == "win32"
 
 
+def is_macos() -> bool:
+    """Return True when running on macOS. Added in v1.0.0.
+
+    A function (not a constant) for the same reason as ``is_windows``:
+    tests swap it to run the Mac code paths on any machine.
+    """
+    return sys.platform == "darwin"
+
+
+def is_linux() -> bool:
+    """Return True when running on Linux. Added in v1.0.0."""
+    return sys.platform.startswith("linux")
+
+
 def which(name: str) -> Optional[str]:
     """Return the full path to an executable on PATH, or None."""
     return shutil.which(name)

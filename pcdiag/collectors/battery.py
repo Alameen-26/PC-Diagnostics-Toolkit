@@ -119,4 +119,13 @@ def collect(snapshot: SystemSnapshot) -> Optional[BatteryInfo]:
             info.wear_percent = wear_percent(info.design_capacity_mwh, info.full_charge_capacity_mwh)
         else:
             snapshot.add_error("battery", "battery health report unavailable: " + ("; ".join(errors) or "no data"))
+    else:
+        # Added in v1.0.0: battery health on Mac (system_profiler) and Linux (sysfs).
+        from . import unix_extras
+        fields = unix_extras.mac_battery() if _shell.is_macos() else unix_extras.linux_battery()
+        for key in ("design_capacity_mwh", "full_charge_capacity_mwh", "cycle_count", "wear_percent"):
+            if fields.get(key) is not None:
+                setattr(info, key, fields[key])
+        if not fields:
+            snapshot.add_error("battery", "battery health (wear, cycles) not exposed on this computer")
     return info

@@ -60,7 +60,13 @@ def _linux_base_freq_mhz() -> Optional[float]:
 
 def cpu_model_name() -> Optional[str]:
     """Best human-readable CPU name for this platform."""
-    name = _windows_cpu_name() if _shell.is_windows() else _linux_cpu_name()
+    if _shell.is_windows():
+        name = _windows_cpu_name()
+    elif _shell.is_macos():  # Added in v1.0.0
+        from .unix_extras import mac_cpu_name
+        name = mac_cpu_name()
+    else:
+        name = _linux_cpu_name()
     return name or platform.processor() or None
 
 
@@ -85,7 +91,8 @@ def collect(snapshot: SystemSnapshot, interval: float = 1.0) -> CPUInfo:
                 info.base_freq_mhz = rnd(freq.max, 0) or None
             else:
                 info.max_freq_mhz = rnd(freq.max, 0) or None
-                info.base_freq_mhz = _linux_base_freq_mhz()
+                # Changed in v1.0.0: the sysfs base clock only exists on Linux.
+                info.base_freq_mhz = None if _shell.is_macos() else _linux_base_freq_mhz()
     except Exception as exc:  # cpu_freq raises on some VMs / ARM boards
         snapshot.add_error("cpu", f"frequency unavailable: {exc}")
 
