@@ -1,3 +1,24 @@
+<!-- Added in v1.0.0 -->
+# PC Diagnostics Toolkit v1.0.0
+
+Released: 2026-11-02. The first complete edition. It finds what is slowing your PC down and gives you one plan to fix it: free fixes first, then upgrades that fit, then replace. Advice only: pcdiag never changes your PC, and nothing leaves your computer.
+
+## New in 1.0
+
+- **Light and dark report.** The HTML report has a new green "health check" look that follows your Windows light/dark setting. Printing always uses the light version.
+- **Opens by itself.** Double-click the app: it scans, opens the report in your browser and keeps the window open until you press Enter.
+- **Repair guides for phones and consoles.** `pcdiag guide phone` or `pcdiag guide console` lists common problems (storage full, battery drain, not charging, overheating, controllers and more). Each guide gives free steps first, the tools you'd need, and clear signs to stop and see a technician.
+- **macOS and Linux** (from source): the scan fills in battery health, drive type and health, graphics and more using built-in tools.
+- **Microsoft Store version** on the way, with a `pcdiag` command that works in any terminal.
+
+## Coming next
+
+v1.1.0 (January 2027): scan history and "what changed since last time", an IT-support ticket export, and optional feedback saved on your PC.
+
+Copyright (c) NiyiSoft. All rights reserved.
+
+---
+
 <!-- Added in v0.3.0 -->
 # PC Diagnostics Toolkit v0.3.0: Make my PC better without buying a new one
 

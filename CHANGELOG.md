@@ -6,13 +6,61 @@ All notable changes to this project are documented here.
 
 - Nothing yet.
 
+<!-- Added in v1.0.0 -->
+## v1.0.0 (2026-11-02)
+
+First complete edition: everything finished and tested so far, plus the Microsoft Store version.
+Planned features move to v1.1.0 and later (see the README roadmap).
+
+
+- Light/dark report theme: the HTML report has a new green "health check" look with a light and a
+  dark palette that follow the system setting (`prefers-color-scheme`). A deep-green top band,
+  the health score in a ring, a colour bar on each card and finding, numbered fix lists, zebra
+  tables and a gold accent. All text meets WCAG AA contrast in both themes; status is still shown by
+  icon and word as well as colour. The CSS lives in the new `pcdiag/report/theme.py` and is added
+  after the built-in styles, so the report markup is unchanged and the report is still one
+  self-contained file with no scripts, web fonts or external links.
+- Printing always uses the light palette, even when the system is in dark mode.
+- Phones: wide tables (Over time, multi-column data) scroll inside their card instead of widening
+  the page, and the sparklines shrink to fit.
+- Made by NiyiSoft badge: the dark-mode version is now white script with a gold crown (was cream),
+  so it matches the dark theme in every browser.
+- README: the banner and a report screenshot, each in light and dark versions
+  (`docs/brand/banner_*.svg`, `docs/brand/report_screenshot_*.svg`) using `<picture>`. They are
+  SVG files with the PNG embedded as base64, so the repo stays text-only like the NiyiSoft badge.
+  The README's dark-mode badge (`docs/brand/niyisoft-badge-light.svg`) now uses the same white/gold mark.
+- Tests: `tests/test_v100_theme.py`.
+- macOS and Linux support: the scan now fills in the details psutil can't see on these systems,
+  using built-in tools that need no admin rights (new `pcdiag/collectors/unix_extras.py`).
+  macOS: CPU name (`sysctl`), Mac model and laptop/desktop (`system_profiler`), battery cycles and
+  health ("Maximum Capacity"), graphics chip, RAM type and whether it is soldered, SSD/HDD and
+  SMART status (`diskutil`), and login items from the LaunchAgents folders. The hidden APFS helper
+  volumes under `/System/Volumes` are skipped so disk space isn't counted twice. Temperatures are
+  reported as "not available" on macOS (Apple only shares them with admin tools).
+  Linux: battery wear and cycle count from `/sys/class/power_supply` (the same numbers `upower`
+  shows) and graphics card names from `lspci`. Anything a tool can't provide stays "can't tell".
+  Windows behaviour is unchanged.
+- Advice wording follows the system: the busy-CPU, graphics-driver and worn-battery fixes name the
+  macOS or Linux settings instead of Windows ones on those systems (Windows text is unchanged).
+- Repair guides for phones and game consoles: `pcdiag guide phone` and `pcdiag guide console`
+  list the problems; add one (e.g. `pcdiag guide console overheating`) for the steps. The data in
+  `pcdiag/knowledge/phones.json` and
+  `pcdiag/knowledge/consoles.json` list symptoms with free-first steps, the tools needed and clear
+  "stop and see a technician" signs, plus shared safety rules (swollen batteries, warranty).
+  The files ship inside the app (exe and Store version).
+- Tests: `tests/test_v100_cross_platform.py` (saved Mac/Linux output, so they run anywhere) and
+  `tests/test_v100_knowledge.py`. The test suite now also runs on macOS in CI.
+- Double-click launch (exe and Store app): after the scan, the HTML report opens in your browser,
+  and the window stays open until you press Enter.
+- Microsoft Store package: `.github/workflows/store-msix.yml` builds an MSIX with a `pcdiag`
+  command for any terminal. Started from the Start menu, reports go to Documents\PC Diagnostics Toolkit
+  (`packaging/store_launcher.py`).
+- Tests: `tests/test_v100_guides.py`; CI runs on Windows, Linux and macOS.
+
 <!-- Changed in v0.3.0: release dated; the Quick start note moved here from Unreleased -->
 ## v0.3.0 (2026-11-02)
 
 Theme: make my PC better without buying a new one. Advice only: pcdiag never changes settings or buys anything.
-
-- Download: free portable Windows .exe (Windows 10/11 x64) on the GitHub Releases page, built and
-  smoke-tested by the new `release-exe` workflow (`packaging/exe_launcher.py`). README has a Download section.
 
 - Docs: Quick start section added to the top of the README (2026-10-23). Step-by-step Windows
   PowerShell guide: prerequisites, clone, virtual environment (with the execution-policy tip),

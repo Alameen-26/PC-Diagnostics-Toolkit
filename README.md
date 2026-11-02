@@ -8,16 +8,23 @@
 
 # PC Diagnostics Toolkit
 
+<!-- Added in v1.0.0: banner in light and dark versions (follows the reader's GitHub theme) -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/banner_dark.svg">
+  <img src="docs/brand/banner_light.svg" alt="PC Diagnostics Toolkit: explains what is slowing a PC down, spots likely hardware faults and recommends upgrades that actually help" width="100%">
+</picture>
+
 A Python tool that explains **what is slowing a PC down**, spots **likely hardware faults**
 (failing drives, worn batteries, overheating), and recommends **upgrades that would actually
-help**, with free fixes listed first. Windows first; cross-platform wherever
-[psutil](https://github.com/giampaolo/psutil) allows (tests run on Linux).
+help**, with free fixes listed first. Built for Windows; also runs on macOS and Linux from source
+(tests run on all three). <!-- Changed in v1.0.0 -->
 
 <!-- Added in v0.3.0 -->
 ## Download (Windows app, no Python needed)
 
 Get the free portable app from the [Releases page](https://github.com/Alameen-26/PC-Diagnostics-Toolkit/releases/latest):
 download `PCDiagnosticsToolkit-<version>-windows-x64.exe` and double-click it (Windows 10/11, 64-bit, no install).
+A double-click runs a scan, opens the report in your browser and keeps the window open until you press Enter. <!-- Changed in v1.0.0 -->
 It isn't code-signed yet, so if SmartScreen warns, click **More info**, then **Run anyway**. Run it as
 Administrator for the full set of checks. The SHA256 checksum is listed with each release.
 
@@ -46,8 +53,8 @@ and run `.\.venv\Scripts\Activate.ps1` before using the tool.
 pytest -q
 ```
 
-<!-- Changed in v0.3.0: test count -->
-You should see about 365 tests pass.
+<!-- Changed in v1.0.0: test count -->
+You should see about 411 tests pass.
 
 **3. Scan your PC**
 
@@ -154,10 +161,20 @@ python -m pcdiag troubleshoot slow-boot --scan   # also: restarts, freezes, over
   say "can't tell".
 - **Troubleshooting by symptom** (`pcdiag troubleshoot`): slow boot, restarts, freezes,
   overheating, drive noises.
+- **Repair guides for phones and game consoles** (`pcdiag guide phone` / `pcdiag guide console`): <!-- Added in v1.0.0 -->
+  free steps first, the tools you'd need, and clear signs to stop and see a technician.
 - **Upgrade recommender** ranks purchases by expected impact (failing disk first and marked
   urgent, then HDD -> SSD, RAM, bigger drive, battery, GPU).
 - **Reports**: a terminal summary with a verdict and a 0-100 health score, a self-contained
   HTML report, and the raw JSON snapshot.
+  <!-- Changed in v1.0.0 -->
+  The HTML report has a light and a dark theme that follow your Windows setting (printing always
+  uses the light one):
+
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/report_screenshot_dark.svg">
+    <img src="docs/brand/report_screenshot_light.svg" alt="The HTML report for a slow old laptop: a 'Needs attention' verdict with a health score of 41, and at-a-glance cards for CPU, memory, disk space, temperature, battery and disk health" width="100%">
+  </picture>
 - **Optional benchmark** (~10-20 s): CPU single/multi-core, sequential disk read/write and
   memory copy. Scores are **relative**, for comparing your own runs over time.
 - **Compare** two scans (e.g. monthly) to see what got better or worse.
@@ -195,7 +212,8 @@ commands, so check them before sharing.
 - `pcdiag/analysis/`: rules, findings, the upgrade recommender, upgrade compatibility
   (`compat.py`) and the improvement plan (`plan.py`) <!-- Changed in v0.3.0 -->
 - `pcdiag/troubleshoot.py`: symptom guides <!-- Added in v0.3.0 -->
-- `pcdiag/report/`: HTML and Markdown renderers
+- `pcdiag/report/`: HTML and Markdown renderers; `theme.py` holds the light/dark report theme <!-- Changed in v1.0.0 -->
+- `pcdiag/guides.py` and `pcdiag/knowledge/`: phone and console repair guides <!-- Added in v1.0.0 -->
 - `pcdiag/benchmark.py`, `pcdiag/compare.py`, `pcdiag/terminal.py`, `pcdiag/__main__.py` (CLI)
 - `pcdiag/fixtures.py`: example snapshots (healthy gaming PC, slow old laptop, failing disk)
 - `tests/`: pytest suite; Windows parsing is tested on any OS using canned outputs in `tests/data/`
@@ -204,19 +222,22 @@ commands, so check them before sharing.
 
 One release every two months. The old roadmap items are folded into the releases below.
 
-<!-- Changed in v0.3.0: marked released -->
+<!-- Changed in v1.0.0: v1.0.0 released; later items moved to v1.1.0 and up -->
 - **v0.3.0 (released 2026-11-02) - Make my PC better without buying a new one:** one free -> cheap -> replace
-  plan; upgrade compatibility (soldered vs socketed RAM, max RAM, free slots, desktop vs no battery);
-  guided troubleshooting by symptom; CPU-sensor flag on temperatures and a GPU-driver age check.
-- **v0.4.0 (January 2027) - Remember and hand off:** automatic scan history and baselines
+  plan; upgrade compatibility; guided troubleshooting by symptom.
+- **v1.0.0 (released 2026-11-02) - Complete first edition:** light/dark HTML report theme; macOS and
+  Linux support; phone and console repair guides; double-click launch that opens the report; the
+  Microsoft Store version.
+- **v1.1.0 (January 2027) - Remember and hand off:** automatic scan history and baselines
   ("what changed since last time"); an IT-support ticket export; optional post-scan feedback saved
-  locally; a portable `.exe` with a checksum.
-- **v0.5.0 (March 2027) - Show the working:** a "Why this score" breakdown with per-area
+  locally.
+- **v1.2.0 (March 2027) - Show the working:** a "Why this score" breakdown with per-area
   subscores, `METHODOLOGY.md` and a no-scareware charter; crash evidence from the Event Log and
   Reliability Monitor, with a memory-test hint; a benchmark context guard (battery, power plan,
   pending Windows updates); `--redact`, `NO_COLOR`/`--plain` and accessibility fixes.
-- **v0.6.0 (May 2027) - See it at a glance:** a local, offline dashboard with history charts; an
+- **v1.3.0 (May 2027) - See it at a glance:** a local, offline dashboard with history charts; an
   optional short stress and throttle test; a multi-PC summary from a folder of snapshots.
+- **Later:** a web troubleshooter and an Android app built on the same repair guides.
 
 ## License
 
