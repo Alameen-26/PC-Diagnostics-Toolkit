@@ -142,7 +142,10 @@ def test_html_structure(name):
                     "Upgrades worth buying", "Findings", "System overview", "Readings taken"):
         assert section in html
     assert "prefers-color-scheme: dark" in html
-    assert "<script" not in html and "<link" not in html and "src=" not in html   # self-contained
+    # Changed in v0.2.0: the embedded NiyiSoft badge uses src="data:..." URIs, so "self-contained"
+    # now means every src= is an inline data: URI (still no external files, scripts or links).
+    assert "<script" not in html and "<link" not in html   # self-contained
+    assert html.count("src=") == html.count('src="data:image/png;base64,')
     assert "health score" in html
 
 
