@@ -1,6 +1,8 @@
 # pcdiag/report/summary.py
 # Added in v0.1.0
 # Changed in v0.1.0 (follow-up): "run as Administrator" card text, "Can't tell" label for data gaps, read_errors in disk-health card, bus type in overview, raw benchmark rows.
+# Changed in v0.2.0: "Over time" section data (``over_time``), sustained-finding phrases, monitor-aware reading times.
+# Changed in v0.3.0: ``improvement_plan`` helper shared by the HTML/Markdown "Your improvement plan" section.
 """Shared report logic used by both the HTML and Markdown renderers.
 
 Contents
@@ -14,6 +16,9 @@ Contents
 * ``free_fixes``    - the no-cost actions pulled from problem findings, shown
                       before any purchase.
 * ``group_findings``, ``evidence_label``, ``reading_times``, ``overview_rows``.
+* ``over_time``     - (Added in v0.2.0) the monitor window, per-metric stats
+                      and sparkline data for the "Over time" section, or None
+                      when ``scan --monitor`` wasn't used.
 
 Keeping this logic here guarantees the two report formats always agree.
 """
@@ -27,6 +32,7 @@ from ..analysis import rules as R
 from ..analysis.findings import Category, Confidence, Finding, Severity
 from ..analysis.recommend import Recommendation
 from ..analysis.rules import admin_blocked_collectors, missing_core_sections
+from ..analysis.sustained import MONITOR_HINT, fmt_duration, over_time_summary  # Added in v0.2.0
 from ..models import SmartStatus, SystemSnapshot
 
 # --------------------------------------------------------------------------
@@ -69,11 +75,15 @@ class Verdict:
 # sentence names the biggest causes first (not just the first by severity).
 _SLOWDOWN_PHRASES: list[tuple[str, str]] = [
     ("storage.hdd_system_drive", "the boot drive is a hard disk"),
+    ("memory.sustained", "RAM stays nearly full"),            # Added in v0.2.0 (over-time version)
     ("memory.pressure", "RAM is nearly full"),
     ("memory.low_total", "it has too little RAM"),
     ("storage.system_disk_full", "the system drive is almost full"),
+    ("thermal.cpu_sustained", "the CPU runs hot for long periods"),  # Added in v0.2.0
     ("thermal.cpu", "the CPU is overheating and slowing itself down"),
+    ("storage.disk_busy_sustained", "the disk is maxed out most of the time"),  # Added in v0.2.0
     ("storage.disk_busy", "the disk is maxed out"),
+    ("cpu.sustained", "the CPU is pegged most of the time"),  # Added in v0.2.0
     ("cpu.busy", "the CPU is constantly busy"),
     ("startup.too_many", "too many apps start at sign-in"),  # Changed in v0.1.0: OS-neutral
     ("gpu.driver_outdated", "the graphics driver is very old"),
@@ -85,6 +95,7 @@ _OTHER_PHRASES = {
     "battery.worn": "the battery is worn",
     "battery.replace": "the battery needs replacing",
     "storage.data_disk_full": "a data drive is nearly full",
+    "storage.disk_filling": "the system drive is filling up",  # Added in v0.2.0
 }
 
 # Health score (rule of thumb). Bands line up with the verdict colours:
@@ -97,6 +108,13 @@ _WARNING_SCORE_CAP = 79    # any warning: score <= 79 (out of the green band)
 _WARNING_SCORE_FLOOR = 41  # warnings alone never reach the red band
 
 
+# Explained in v0.3.0: worked example of the health score.
+#   Start at 100. Two WARNING findings (8 each) and three INFO findings (1 each)
+#   give 100 - 16 - 3 = 81. Because there is a warning, the score is clamped
+#   to at most 79, so the result is 79 (amber, "Needs attention").
+# Why clamp at all? Without it a PC with one serious warning could still show
+# 92 next to an amber banner. Clamping keeps the number and the colour honest
+# with each other. The penalties are a rule of thumb, not a scientific scale.
 def health_score(snapshot: SystemSnapshot, findings: list[Finding]) -> Optional[int]:
     """0-100 overall score. None if core data is missing and no problem was found."""
     has_problem = any(f.is_problem for f in findings)
@@ -264,8 +282,10 @@ def _base_metric_cards(s: SystemSnapshot) -> list[MetricCard]:
                                  BAD: "Almost full - slows the system and updates"}[st]))
 
     # CPU temperature (hottest CPU sensor)
-    temps = [t.current_c for t in s.temperatures
-             if t.current_c is not None and R._CPU_SENSOR_RE.search(f"{t.label} {t.sensor or ''}")]
+    # Changed in v0.3.0 (review): same sensor choice as the cpu_thermal rule, so a
+    # non-CPU sensor flagged is_cpu=False (e.g. a 95°C GPU hotspot) never colours the
+    # CPU card, and a confirmed CPU sensor with an unusual label still counts.
+    temps = [t.current_c for t in R.cpu_temperature_readings(s)]
     if not temps:
         cards.append(MetricCard("Temperature", "unknown", UNKNOWN, _UNKNOWN_ADMIN))
     else:
@@ -371,7 +391,13 @@ def reading_times(s: SystemSnapshot) -> list[str]:
         lines.append(f"Disk activity sampled over {', '.join(f'{x:g}' for x in samples)} s")
     if s.benchmark and s.benchmark.duration_seconds is not None:
         lines.append(f"Benchmark ran for {s.benchmark.duration_seconds:g} s")
-    lines.append("CPU, memory and temperature values are a single snapshot, not an average.")
+    # Changed in v0.2.0: with monitor data, point to the over-time section.
+    ot = over_time_summary(s)
+    if ot is not None:
+        lines.append(f"Monitored for {fmt_duration(ot['view'].duration_s)} ({ot['view'].sample_count} samples): "
+                     "see Over time. The cards show the single snapshot.")
+    else:
+        lines.append("CPU, memory and temperature values are a single snapshot, not an average.")
     return lines
 
 
@@ -442,3 +468,155 @@ def benchmark_rows(s: SystemSnapshot) -> list[tuple[str, str]]:
             ("Disk write", _fmt(b.disk_write_mbps, " MB/s", 0)),
             ("Memory copy", _fmt(b.memory_mbps, " MB/s", 0))]
     return rows
+
+
+# ---------------------------------------------------------------------------
+# "Over time" section (Added in v0.2.0)
+# ---------------------------------------------------------------------------
+
+#: Shown instead of the section body when no monitor data was collected.
+NO_MONITOR_NOTE = (f"This report is based on a single moment, so it can't tell a brief spike from a sustained "
+                   f"problem. To watch CPU, memory and disk over time, run `{MONITOR_HINT}` (5 minutes) while "
+                   "you use the PC as usual.")
+
+_CONFIDENCE_WORD = {Confidence.LOW: "Low", Confidence.MEDIUM: "Medium", Confidence.HIGH: "High"}
+
+
+@dataclass
+class OverTimeRow:
+    """One metric row in the "Over time" table, with all values already formatted as text."""
+    label: str
+    mean: str
+    p95: str
+    max: str
+    above: str        # e.g. "62% of the time above 85%"
+    streak: str       # longest unbroken stretch past the threshold
+    readings: str     # "60 of 60"
+
+
+@dataclass
+class OverTime:
+    """Everything both renderers need for the "Over time" section.
+
+    ``sparklines`` maps a label to ``(values, threshold, max_scale)`` for
+    CPU and RAM. Values may contain None for gaps.
+    """
+    start: str
+    duration: str
+    sample_count: int
+    confidence: str
+    explanation: str
+    rows: list[OverTimeRow]
+    sparklines: list[tuple[str, list[Optional[float]], float, float]]
+    notes: list[str]
+
+
+def _num(v: Optional[float], unit: str) -> str:
+    """Format a statistic for the table; None stays 'unknown'."""
+    return "unknown" if v is None else f"{v:.0f}{unit}"
+
+
+def _upper_first(text: str) -> str:
+    """Capitalise only the first character (str.capitalize would lower-case the rest)."""
+    return text[:1].upper() + text[1:]
+
+
+# --------------------------------------------------------------------------
+# Improvement plan (Added in v0.3.0)
+# --------------------------------------------------------------------------
+
+#: Text shown under the plan heading in every report format. Added in v0.3.0.
+PLAN_NOTE = ("Ordered free \u2192 cheap \u2192 replace. Advice only: pcdiag never changes your PC. "
+             "Upgrades are only listed when the part fits (or we say we can't tell).")
+PLAN_TIER_LABEL = {"urgent": "Urgent", "free": "Free", "cheap": "Upgrade", "replace": "Replace"}
+
+
+def improvement_plan(s: SystemSnapshot, findings: list[Finding], recs: list[Recommendation]):
+    """Build the improvement plan for the reports; None if building it fails. Added in v0.3.0.
+
+    Guarded so a bug in the planner never breaks the rest of the report.
+    """
+    try:
+        from ..analysis.plan import build_plan
+        return build_plan(s, findings, recs)
+    except Exception as exc:
+        # Changed in v0.3.0 (review): say the plan failed instead of silently dropping
+        # the section (a missing plan could be misread as "nothing to do").
+        try:
+            from ..analysis.plan import ImprovementPlan
+        except Exception:
+            return None
+        return ImprovementPlan(headline=(f"The improvement plan couldn't be built for this scan "
+                                         f"({type(exc).__name__}). The fix lists and findings below are "
+                                         "still complete."))
+
+
+def plan_covered_ids(plan) -> set[str]:
+    """Finding ids that already have a step in the plan. Added in v0.3.0 (review)."""
+    if plan is None:
+        return set()
+    return {fid for st in plan.steps for fid in st.related_findings}
+
+
+#: Shown under "What to do" when the plan already lists some items. Added in v0.3.0 (review).
+PLAN_DEDUP_NOTE = "Items already in your improvement plan above aren't repeated here."
+PLAN_ALL_COVERED = "All covered in your improvement plan above."
+
+
+def what_to_do(findings: list[Finding], recs: list[Recommendation], plan) -> tuple[list, list, bool]:
+    """(free fixes, upgrade recs, filtered?) for the "What to do" section.
+
+    Added in v0.3.0 (review): when the plan has steps, fixes and upgrades it
+    already covers are left out, so the report doesn't list the same advice twice
+    (and an upgrade the plan ruled out, like RAM in a soldered laptop, isn't
+    suggested again underneath it). Without a plan the lists are unchanged.
+    """
+    fixes = free_fixes(findings)
+    if plan is None or not plan.steps:
+        return fixes, list(recs), False
+    covered = plan_covered_ids(plan)
+    titles = {st.title for st in plan.steps}
+    fixes = [(f, t) for f, t in fixes if f.id not in covered]
+    recs = [r for r in recs if r.title not in titles
+            and not (r.related_findings and r.related_findings[0] in covered)]
+    return fixes, recs, True
+
+
+def plan_step_tier(step) -> str:
+    """'urgent' / 'free' / 'cheap' / 'replace' for a PlanStep. Added in v0.3.0."""
+    return "urgent" if step.urgent else step.tier.value
+
+
+def over_time(s: SystemSnapshot) -> Optional[OverTime]:
+    """Build the "Over time" data, or None when the snapshot has no monitor samples."""
+    ot = over_time_summary(s)
+    if ot is None:
+        return None
+    view = ot["view"]
+    rows, sparks = [], []
+    for label, unit, st in ot["stats"]:
+        word = "above" if st.above else "below"
+        above = (f"{st.pct_above:.0f}% of the time {word} {st.threshold:.0f}{unit}" if st.threshold or st.above
+                 else "n/a")
+        rows.append(OverTimeRow(
+            label=label, mean=_num(st.mean, unit), p95=_num(st.p95, unit), max=_num(st.max, unit), above=above,
+            streak=fmt_duration(st.longest_streak_s) if st.longest_streak_s else "none",
+            readings=f"{st.valid_count} of {st.sample_count}"))
+        if st.key in ("cpu", "memory"):
+            # Label carries the numbers too, so the chart isn't the only way to read it.
+            sparks.append((f"{label} (mean {_num(st.mean, unit)}, max {_num(st.max, unit)})",
+                           st.values, st.threshold, 100.0))  # percentages: fixed 0-100 scale
+    notes = [f"{label}: sampled, but no readings were available (often needs Administrator, or isn't "
+             "supported on this OS)." for label in ot["unread"]]
+    fill = ot["fill"]
+    if fill and fill["meaningful"]:
+        notes.append(f"System drive free space is falling at {abs(fill['slope_gb_per_hour']):.1f} GB/hour; "
+                     f"projected full in about {fmt_duration(fill['hours_to_full'] * 3600)} if that continues.")
+    elif fill:
+        notes.append("System drive free space stayed steady (changes were within normal noise).")
+    start = view.start.strftime("%Y-%m-%d %H:%M:%S %Z").strip() if view.start else "unknown"
+    return OverTime(start=start, duration=fmt_duration(view.duration_s), sample_count=view.sample_count,
+                    confidence=_CONFIDENCE_WORD[ot["confidence"]],
+                    # The heading already says "Confidence: High", so drop the repeated "High confidence: " prefix.
+                    explanation=_upper_first(re.sub(r"^\w+ confidence: ", "", ot["explanation"])),
+                    rows=rows, sparklines=sparks, notes=notes)
