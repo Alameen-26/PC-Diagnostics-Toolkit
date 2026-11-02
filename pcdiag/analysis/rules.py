@@ -424,11 +424,27 @@ def usb_system_drive(s: SystemSnapshot) -> Iterable[Finding]:
 # CPU and thermals
 # --------------------------------------------------------------------------
 
+def cpu_temperature_readings(s: SystemSnapshot) -> list:
+    """Temperature readings that belong to the CPU. Added in v0.3.0.
+
+    Trusts the collector's CPU-sensor flag when it is set (True = CPU,
+    False = not the CPU, e.g. a GPU hotspot) and falls back to the label for
+    None. Shared by the ``cpu_thermal`` rule and the report's Temperature card
+    so the two can never disagree about which sensor is the CPU.
+    """
+    return [t for t in s.temperatures if t.current_c is not None and (
+        getattr(t, "is_cpu", None) is True
+        or (getattr(t, "is_cpu", None) is None and _CPU_SENSOR_RE.search(f"{t.label} {t.sensor or ''}")))]
+
+
 @rule("cpu_thermal")
 def cpu_thermal(s: SystemSnapshot) -> Iterable[Finding]:
     """High CPU temperature and/or signs of thermal throttling."""
-    readings = [t for t in s.temperatures if t.current_c is not None]
-    cpu_readings = [t for t in readings if _CPU_SENSOR_RE.search(f"{t.label} {t.sensor or ''}")]
+    # Changed in v0.3.0: trust the collector's CPU-sensor flag when it is set
+    # (True = CPU, False = not the CPU); fall back to the label for None.
+    # Changed in v0.3.0 (review): moved into cpu_temperature_readings() so the
+    # report card uses the same choice.
+    cpu_readings = cpu_temperature_readings(s)
     if not cpu_readings:
         # Never claim temps are fine without data. Data errors are surfaced
         # separately, so only add an INFO when there's no explanation already.
@@ -438,7 +454,9 @@ def cpu_thermal(s: SystemSnapshot) -> Iterable[Finding]:
             id="thermal.unknown", title="CPU temperature couldn't be read",
             severity=Severity.INFO, category=Category.THERMAL,
             cause="No CPU temperature sensor was available, so overheating can't be ruled out.",
-            fix="Try running as administrator or check with HWiNFO.", confidence=Confidence.LOW)]
+            # Changed in v0.3.0: mention LibreHardwareMonitor, which pcdiag reads when it is running.
+            fix=("Try running as administrator, or keep LibreHardwareMonitor open while scanning "
+                 "(pcdiag reads its CPU sensors), or check with HWiNFO."), confidence=Confidence.LOW)]
     hottest = max(cpu_readings, key=lambda t: t.current_c)
     temp = hottest.current_c
     # Use the sensor's own "high" mark when it is lower than our generic limit.
@@ -451,7 +469,10 @@ def cpu_thermal(s: SystemSnapshot) -> Iterable[Finding]:
         and c.current_freq_mhz < THROTTLE_FREQ_RATIO * c.base_freq_mhz)
     ev = {"sensor": hottest.label, "cpu_temp_c": temp, "sensor_high_c": hottest.high_c,
           "current_freq_mhz": c.current_freq_mhz if c else None,
-          "base_freq_mhz": c.base_freq_mhz if c else None, "likely_throttling": throttling}
+          "base_freq_mhz": c.base_freq_mhz if c else None, "likely_throttling": throttling,
+          # Added in v0.3.0: say whether this is a confirmed CPU sensor or a label guess.
+          "sensor_source": hottest.sensor,
+          "cpu_sensor": ("confirmed" if getattr(hottest, "is_cpu", None) is True else "guessed from label")}
     if temp >= CPU_TEMP_CRITICAL_C or (hottest.critical_c and temp >= hottest.critical_c):
         sev = Severity.CRITICAL
     elif temp >= warn_at or (throttling and temp >= CPU_TEMP_WARN_C - 10):

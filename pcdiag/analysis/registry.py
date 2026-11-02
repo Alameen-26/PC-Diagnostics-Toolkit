@@ -1,5 +1,6 @@
 # pcdiag/analysis/registry.py
 # Added in v0.1.0
+# Changed in v0.2.0: registers the sustained rules and resolves snapshot/over-time overlaps.
 """Rule registry and the ``analyze`` entry point.
 
 A rule is a pure function ``SystemSnapshot -> Iterable[Finding]``. Rules are
@@ -20,6 +21,12 @@ Rule = Callable[[SystemSnapshot], Iterable[Finding]]
 RULES: dict[str, Rule] = {}
 
 
+# Explained in v0.3.0: this is the "registry" (plug-in) pattern. Writing
+#     @rule("memory.pressure")
+#     def memory_pressure(snapshot): ...
+# adds the function to the RULES dict when the module is imported. ``analyze``
+# then just loops over RULES, so adding a new check never means editing a big
+# if/else chain, and a test can run one rule on its own by name.
 def rule(name: str) -> Callable[[Rule], Rule]:
     """Decorator registering a rule under ``name`` (registration order = run order)."""
     def deco(fn: Rule) -> Rule:
@@ -37,6 +44,9 @@ def analyze(snapshot: SystemSnapshot, rules: dict[str, Rule] | None = None) -> l
     INFO finding so the bug is visible in the report.
     """
     from . import rules as _builtin  # noqa: F401  (ensures built-in rules are registered)
+    # Changed in v0.2.0: the sustained (over-time) rules live in their own
+    # module; importing it registers them after the snapshot rules.
+    from . import sustained as _sustained
 
     out: list[Finding] = []
     for name, fn in (rules if rules is not None else RULES).items():
@@ -48,4 +58,7 @@ def analyze(snapshot: SystemSnapshot, rules: dict[str, Rule] | None = None) -> l
                 severity=Severity.INFO, category=Category.DATA,
                 cause=f"{type(exc).__name__}: {exc}", fix="Report this as a bug.",
                 evidence={"rule": name}, confidence=Confidence.LOW))
-    return sort_findings(out)
+    # Changed in v0.2.0: an over-time finding supersedes (or, on a short
+    # window, merges into) the single-reading finding for the same metric,
+    # so nothing is reported twice.
+    return sort_findings(_sustained.resolve_overlaps(out))

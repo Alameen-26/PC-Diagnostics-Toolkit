@@ -2,7 +2,8 @@
 
 One module per area (``os_info``, ``cpu``, ``memory``, ``disks``,
 ``disk_io``, ``gpu``, ``temperatures``, ``battery``, ``processes``,
-``startup``). Each exposes ``collect(snapshot, ...)``, returns model objects
+``startup``; v0.3.0 adds ``system_info`` for device type, power plan and
+Windows Update). Each exposes ``collect(snapshot, ...)``, returns model objects
 and never raises: problems are recorded with ``snapshot.add_error``.
 Everything external goes through :mod:`pcdiag.collectors._shell`.
 
@@ -17,6 +18,7 @@ from typing import Any, Callable
 
 from ..models import SystemSnapshot
 from . import battery, cpu, disk_io, disks, gpu, memory, os_info, processes, startup, temperatures
+from . import system_info  # Added in v0.3.0
 
 __all__ = ["collect_snapshot", "safe_collect"]
 
@@ -34,6 +36,12 @@ def safe_collect(snapshot: SystemSnapshot, name: str, fn: Callable[..., Any], de
         return default
 
 
+# Explained in v0.3.0: why threads? Collectors spend most of their time *waiting* (for a
+# 1-second CPU sample, or for PowerShell to start and answer), not computing.
+# Python threads can wait in parallel even with the GIL, so running them in a
+# ThreadPoolExecutor makes a scan take about as long as the slowest collector
+# instead of the sum of all of them. ``safe_collect`` wraps each one so a
+# single failure becomes an entry in ``snapshot.errors`` and the scan goes on.
 def collect_snapshot(include_benchmark: bool = False, quick: bool = False,
                      benchmark_disk_mb: int = 256) -> SystemSnapshot:
     """Run every collector and return a (possibly partial) snapshot.
@@ -68,6 +76,9 @@ def collect_snapshot(include_benchmark: bool = False, quick: bool = False,
         "temperatures": ("temperatures", temperatures.collect, [], {}),
         "battery": ("battery", battery.collect, None, {}),
         "startup_items": ("startup", startup.collect, [], {}),
+        # Added in v0.3.0: laptop/desktop, power plan, Windows Update status.
+        "device": ("device", system_info.collect_device, None, {}),
+        "software": ("software", system_info.collect_software, None, {}),
     }
     for phase in (sampling, others):
         with ThreadPoolExecutor(max_workers=len(phase)) as pool:
