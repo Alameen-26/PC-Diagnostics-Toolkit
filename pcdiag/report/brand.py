@@ -15,8 +15,9 @@ Design rules for this file (Added in v0.2.0):
   ``niyisoft_badge_data.py`` instead of ``assets/*.png`` files. The repo is
   pushed through an API that only handles text files, and the strings drop
   straight into the ``data:`` URIs, so the report stays self-contained.
-* Two variants: navy text for light mode, cream text for dark mode. CSS in
-  ``html.py`` shows the right one via ``prefers-color-scheme``.
+* Two variants: navy text for light mode, white text with a gold crown for
+  dark mode (Changed in v1.0.0: was cream). CSS shows the right one via
+  ``prefers-color-scheme``; ``theme.py`` keeps the same swap.
 * If the badge data is missing or empty (e.g. a broken install), fall back to
   plain text so a report is never lost because of a logo.
 """
@@ -36,7 +37,7 @@ BRAND_TEXT = "Made by NiyiSoft"     # Added in v0.2.0: also the image alt text
 # Changed in v0.2.0: names of the base64 constants in niyisoft_badge_data.py
 # (previously PNG file names in assets/).
 _LIGHT_MODE_FILE = "BADGE_PNG_B64"         # navy script, for light backgrounds
-_DARK_MODE_FILE = "BADGE_LIGHT_PNG_B64"    # cream script, for dark backgrounds
+_DARK_MODE_FILE = "BADGE_LIGHT_PNG_B64"    # white script + gold crown, for dark backgrounds (Changed in v1.0.0)
 
 # Added in v0.2.0: styling for the mark. Static (not position:fixed) so it never
 # covers report content or prints on top of a table.

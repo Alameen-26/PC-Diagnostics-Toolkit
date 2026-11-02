@@ -4,6 +4,7 @@
 # Changed in v0.2.0: "Over time" section with inline-SVG sparklines.
 # Changed in v0.2.0: "Made by NiyiSoft" mark in the bottom-right corner (see brand.py).
 # Changed in v0.3.0: "Your improvement plan" section (free -> cheap -> replace) before "What to do".
+# Changed in v1.0.0: light/dark theme (theme.py) appended after the built-in CSS.
 """Self-contained HTML report ("My PC Health Report").
 
 Layout, top to bottom:
@@ -23,7 +24,8 @@ Layout, top to bottom:
 
 Rules for this file:
 * No external assets or scripts; CSS is inline and adapts to dark mode via
-  ``prefers-color-scheme``.
+  ``prefers-color-scheme`` (Changed in v1.0.0: the light/dark theme lives in
+  ``theme.py``).
 * Status is never shown by colour alone: every coloured element also has an
   icon and a text label (accessibility for colour-blind users).
 * Every string from the snapshot is HTML-escaped (a hostile process name must
@@ -37,6 +39,7 @@ from ..analysis.findings import Finding, Severity
 from ..analysis.recommend import Recommendation
 from ..models import SystemSnapshot
 from .brand import BRAND_CSS, brand_html  # Added in v0.2.0
+from .theme import THEME_CSS  # Added in v1.0.0
 from .summary import (
     BAD, BENCHMARK_NOTE, GOOD, SEVERITY_GROUP_TITLE, STATUS_STYLE, UNKNOWN, WARN, benchmark_rows,
     NO_MONITOR_NOTE, OverTime, evidence_label, free_fixes, group_findings, metric_cards, over_time, overview_rows,
@@ -233,7 +236,8 @@ def render_html(snapshot: SystemSnapshot, findings: list[Finding], recs: list[Re
         '<meta name="color-scheme" content="light dark">',
         f"<title>My PC Health Report: {escape(host)}</title>",
         # Changed in v0.2.0: BRAND_CSS appended for the NiyiSoft mark.
-        f"<style>{_CSS}{BRAND_CSS}</style></head><body><main>",
+        # Changed in v1.0.0: THEME_CSS (light/dark theme) last, so it overrides both.
+        f"<style>{_CSS}{BRAND_CSS}{THEME_CSS}</style></head><body><main>",
         f"<h1>My PC Health Report <span class=\"muted\">· {escape(host)}</span></h1>",
         # 1. Verdict banner. data-light lets tests/tools read the result.
         f'<section class="card banner s-{vst}" data-light="{v.light}" role="status">'
