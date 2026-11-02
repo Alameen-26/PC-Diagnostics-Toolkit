@@ -1,6 +1,8 @@
 # pcdiag/analysis/recommend.py
 # Added in v0.1.0
 # Changed in v0.1.0 (follow-up): OS-neutral wording in reasons.
+# Changed in v0.2.0: sustained memory/disk-busy findings count as evidence.
+# Changed in v0.3.0 (review): no RAM upgrade is suggested when the RAM is soldered.
 """Upgrade recommender: which purchase would actually help this PC?
 
 ``recommend_upgrades`` reads the snapshot plus the findings from ``analyze``
@@ -28,6 +30,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from ..models import DiskKind, Model, SystemSnapshot
+from .compat import ram_soldered  # Added in v0.3.0 (review)
 from .findings import Finding
 
 # Impact scores for each recommendation type (0-100). Kept as constants so
@@ -76,6 +79,22 @@ def _first(findings: list[Finding], fid: str) -> Finding | None:
     return next((f for f in findings if f.id == fid), None)
 
 
+def _ram_cannot_be_added(snapshot: SystemSnapshot) -> bool:
+    """True when the RAM is soldered to the board and there is no free slot to add a stick.
+
+    Added in v0.3.0 (review): before, only the HTML and Markdown reports hid the
+    RAM suggestion in this case, so the terminal and JSON output still told
+    people to buy RAM they couldn't fit. Checking here fixes every output.
+    A board that has soldered memory plus one empty slot can still take a stick,
+    so it is not filtered out.
+    """
+    if ram_soldered(snapshot) is not True:
+        return False
+    m = snapshot.memory
+    free = (m.slots_total - m.slots_used) if m and m.slots_total and m.slots_used is not None else None
+    return not free
+
+
 def recommend_upgrades(snapshot: SystemSnapshot, findings: list[Finding]) -> list[Recommendation]:
     """Return upgrade recommendations ranked by expected impact (best first).
 
@@ -108,7 +127,9 @@ def recommend_upgrades(snapshot: SystemSnapshot, findings: list[Finding]) -> lis
         need_gb = sd.used_gb if sd and sd.used_gb is not None else None
         size_hint = ("a 1 TB SSD" if need_gb and need_gb > 350 else "a 500 GB SSD")
         cost = CostTier.MEDIUM if need_gb and need_gb > 350 else CostTier.LOW
-        related = [hdd.id] + _ids(findings, "storage.disk_busy") + _ids(findings, "storage.system_disk_full")
+        # Changed in v0.2.0: the over-time disk-busy finding counts as evidence too.
+        related = ([hdd.id] + _ids(findings, "storage.disk_busy") + _ids(findings, "storage.disk_busy_sustained")
+                   + _ids(findings, "storage.system_disk_full"))
         recs.append(Recommendation(
             title="Replace the system hard drive with an SSD",
             expected_impact=IMPACT_HDD_TO_SSD,
@@ -120,8 +141,13 @@ def recommend_upgrades(snapshot: SystemSnapshot, findings: list[Finding]) -> lis
 
     # --- 3. RAM -------------------------------------------------------------
     low_ram = _first(findings, "memory.low_total")
-    pressure = _first(findings, "memory.pressure")
-    if low_ram and low_ram.is_problem:
+    # Changed in v0.2.0: when monitor data exists, "memory.sustained"
+    # replaces "memory.pressure", so either one counts as memory pressure.
+    pressure = _first(findings, "memory.sustained") or _first(findings, "memory.pressure")
+    # Changed in v0.3.0 (review): soldered RAM with no free slot can't be
+    # upgraded, so neither RAM suggestion below is made.
+    ram_possible = not _ram_cannot_be_added(snapshot)
+    if ram_possible and low_ram and low_ram.is_problem:
         m = snapshot.memory
         slot_text = ""
         if m and m.slots_used is not None and m.slots_total is not None:
@@ -135,7 +161,7 @@ def recommend_upgrades(snapshot: SystemSnapshot, findings: list[Finding]) -> lis
                     + " Laptops with soldered RAM may not be upgradable: check the model first."),
             cost_tier=CostTier.LOW,
             related_findings=[low_ram.id] + ([pressure.id] if pressure and pressure.is_problem else [])))
-    elif (low_ram or (pressure and pressure.is_problem)):
+    elif ram_possible and (low_ram or (pressure and pressure.is_problem)):
         # 8-16 GB machine that's filling up, or high pressure on a big machine.
         total = snapshot.memory.total_gb if snapshot.memory else None
         if total is not None and total < 16:
