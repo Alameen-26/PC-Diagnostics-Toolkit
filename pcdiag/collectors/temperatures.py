@@ -120,6 +120,12 @@ def collect(snapshot: SystemSnapshot) -> list[TemperatureReading]:
                                                "need an Administrator shell and aren't supported on many PCs")
         return readings
 
+    if _shell.is_macos():
+        # Added in v1.0.0: macOS only shares temperatures with admin tools
+        # (powermetrics needs sudo), so say so instead of guessing.
+        snapshot.add_error("temperatures", "not available: macOS doesn't share temperature sensors with apps "
+                                           "without admin rights")
+        return readings
     sensors_fn = getattr(psutil, "sensors_temperatures", None)  # absent on macOS/Windows
     try:
         groups = sensors_fn() if sensors_fn else {}

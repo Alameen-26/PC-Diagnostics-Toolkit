@@ -138,6 +138,12 @@ def _linux_device() -> Optional[DeviceInfo]:
 
 def collect_device(snapshot: SystemSnapshot) -> Optional[DeviceInfo]:
     """Laptop or desktop, maker and model. Never raises."""
+    if _shell.is_macos():  # Added in v1.0.0
+        from .unix_extras import mac_device
+        info = mac_device()
+        if info is None:
+            snapshot.add_error("device", "Mac model unavailable (system_profiler gave no data)")
+        return info
     if not _shell.is_windows():
         return _linux_device()
     errors: list[str] = []

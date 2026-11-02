@@ -116,6 +116,16 @@ def _disk_label(d: DiskInfo) -> str:
 _OS_DISPLAY = {"windows": "Windows", "linux": "Linux", "darwin": "macOS"}
 
 
+def _per_os(s: SystemSnapshot, windows: str, mac: str, linux: str) -> str:
+    """Pick the advice text that matches this computer's system. Added in v1.0.0.
+
+    Windows (and an unknown system) keeps the original Windows wording, so
+    Windows reports read exactly as before.
+    """
+    name = _os_name(s)
+    return mac if name == "macOS" else (linux if name == "Linux" else windows)
+
+
 def _os_name(s: SystemSnapshot) -> str:
     """Display name of the OS ("Windows", "Linux", "macOS").
 
@@ -520,8 +530,13 @@ def cpu_busy(s: SystemSnapshot) -> Iterable[Finding]:
         id="cpu.busy", title=f"CPU is very busy ({c.total_usage_percent:.0f}% in use)",
         severity=Severity.WARNING, category=Category.CPU,
         cause="Something is keeping the processor fully occupied, so everything else waits.",
-        fix=("Free: check the 'heavy processes' finding, let Windows Update/antivirus scans finish, "
-             "remove unwanted startup apps and trial software."),
+        fix=_per_os(s,
+                    "Free: check the 'heavy processes' finding, let Windows Update/antivirus scans finish, "
+                    "remove unwanted startup apps and trial software.",
+                    "Free: check the 'heavy processes' finding (Activity Monitor shows the same list), let "
+                    "Spotlight indexing and software updates finish, and remove unwanted login items.",
+                    "Free: check the 'heavy processes' finding (top or System Monitor shows the same list), "
+                    "let package updates finish, and remove unwanted autostart apps."),
         evidence={"cpu_usage_percent": c.total_usage_percent, "load_avg_1m": c.load_avg_1m,
                   "logical_cores": c.logical_cores},
         confidence=Confidence.MEDIUM)]  # one sample; could be a momentary spike
@@ -600,8 +615,13 @@ def gpu_driver_age(s: SystemSnapshot) -> Iterable[Finding]:
             id="gpu.driver_outdated", title=f"Graphics driver for {g.name or 'GPU'} is {years:.1f} years old",
             severity=sev, category=Category.GPU,
             cause="Old graphics drivers can cause glitches, crashes and slower video/games.",
-            fix=("Free: update via Windows Update (optional updates) or the maker's site "
-                 "(Intel, AMD, NVIDIA, or the laptop manufacturer for older laptops)."),
+            fix=_per_os(s,
+                        "Free: update via Windows Update (optional updates) or the maker's site "
+                        "(Intel, AMD, NVIDIA, or the laptop manufacturer for older laptops).",
+                        "Free: graphics drivers come with macOS updates (System Settings > General > "
+                        "Software Update).",
+                        "Free: install your distribution's updates, or its recommended driver "
+                        "(e.g. Ubuntu's 'Additional Drivers')."),
             evidence={"gpu": g.name, "driver_version": g.driver_version,
                       "driver_date": g.driver_date, "age_days": age_days},
             confidence=Confidence.HIGH))
@@ -651,8 +671,15 @@ def battery_wear(s: SystemSnapshot) -> Iterable[Finding]:
             severity=Severity.WARNING, category=Category.BATTERY,
             cause=(f"Below {BATTERY_WORN_HEALTH_PERCENT:.0f}% health (rule of thumb) the battery is "
                    "considered worn: expect noticeably shorter runtime."),
-            fix=("Free: use Windows battery saver and lower screen brightness; if the laptop has a "
-                 "charge-limit option (e.g. 80%), turn it on to slow further wear. Replace when runtime is too short."),
+            fix=_per_os(s,
+                        "Free: use Windows battery saver and lower screen brightness; if the laptop has a "
+                        "charge-limit option (e.g. 80%), turn it on to slow further wear. Replace when runtime "
+                        "is too short.",
+                        "Free: turn on Low Power Mode and Optimized Battery Charging (System Settings > Battery) "
+                        "and lower screen brightness. Replace when runtime is too short.",
+                        "Free: use the power-saver profile and lower screen brightness; if the laptop has a "
+                        "charge-limit option (e.g. 80%), turn it on to slow further wear. Replace when runtime "
+                        "is too short."),
             evidence=ev, confidence=Confidence.HIGH)]
     return [Finding(
         id="battery.ok", title=f"Battery health is good ({health:.0f}%)",
