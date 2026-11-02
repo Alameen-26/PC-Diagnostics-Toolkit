@@ -1,0 +1,118 @@
+{
+  "device": "console",
+  "applies_to": [
+    "Xbox",
+    "PlayStation",
+    "Nintendo Switch"
+  ],
+  "safety": [
+    "Back up your data before any repair step.",
+    "A swollen, hot, hissing or leaking battery: stop, power off, don't charge it, keep it away from anything flammable, and take it to a repair shop or battery recycler.",
+    "Opening a device can void its warranty. If it's under warranty or AppleCare/protection plan, contact the maker first.",
+    "Unplug the power and remove the battery where possible before opening anything.",
+    "Never open a power supply, charger or TV/console power unit: they hold dangerous charge even when unplugged."
+  ],
+  "symptoms": [
+    {
+      "id": "storage_full",
+      "title": "Not enough storage for games or updates",
+      "steps": [
+        {
+          "do": "Open the console's storage settings and sort games by size.",
+          "why": "Shows which games you can remove and reinstall later.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Delete games you aren't playing; saves usually stay in the cloud or on the console.",
+          "why": "Games are 50-150 GB each.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Add the maker's supported external storage (USB drive, expansion card or microSD for Switch).",
+          "why": "Extends space without opening the console.",
+          "needs": "part"
+        }
+      ],
+      "stop_if": []
+    },
+    {
+      "id": "overheating",
+      "title": "Console is loud, hot or shuts off",
+      "steps": [
+        {
+          "do": "Give it 10-15 cm of space on every side and keep it out of cabinets.",
+          "why": "Consoles need airflow to cool.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Power off, unplug, and clean the outside vents with a soft brush or a vacuum on low.",
+          "why": "Dust on the vents blocks airflow.",
+          "needs": "tool"
+        },
+        {
+          "do": "Stand it the way the maker recommends and keep it off carpet.",
+          "why": "Carpet and blocked vents trap heat.",
+          "needs": "nothing"
+        }
+      ],
+      "stop_if": [
+        "It shuts off on its own after cleaning",
+        "There's a burning smell",
+        "Opening it would be needed (this voids most console warranties)"
+      ]
+    },
+    {
+      "id": "controller",
+      "title": "Controller won't connect, drifts or won't charge",
+      "steps": [
+        {
+          "do": "Charge it with a different cable, then re-pair it using the console's pairing steps.",
+          "why": "Pairing records and cables are the usual cause.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Update the controller firmware from the console's settings.",
+          "why": "Updates fix many connection and drift problems.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Use the console's stick calibration if it has one.",
+          "why": "Small drift can often be calibrated out.",
+          "needs": "nothing"
+        }
+      ],
+      "stop_if": [
+        "Drift remains after calibration and updates (stick wear: maker repair or replacement)"
+      ]
+    },
+    {
+      "id": "slow_or_crashing",
+      "title": "Games crash or the console is slow",
+      "steps": [
+        {
+          "do": "Fully power off (not rest mode), unplug for 1 minute, and start again.",
+          "why": "Clears temporary data.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Install system and game updates.",
+          "why": "Crashes are often fixed by patches.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Keep at least 10% storage free.",
+          "why": "Updates and caches need room.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Use the console's built-in database rebuild or cache clear, if it has one (for example PlayStation Safe Mode).",
+          "why": "Fixes slow menus without deleting games.",
+          "needs": "nothing"
+        }
+      ],
+      "stop_if": [
+        "Errors that mention storage or hardware even after updates"
+      ]
+    }
+  ]
+}

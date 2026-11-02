@@ -1,0 +1,152 @@
+{
+  "device": "phone",
+  "applies_to": [
+    "Android",
+    "iPhone"
+  ],
+  "safety": [
+    "Back up your data before any repair step.",
+    "A swollen, hot, hissing or leaking battery: stop, power off, don't charge it, keep it away from anything flammable, and take it to a repair shop or battery recycler.",
+    "Opening a device can void its warranty. If it's under warranty or AppleCare/protection plan, contact the maker first.",
+    "Unplug the power and remove the battery where possible before opening anything.",
+    "Never open a power supply, charger or TV/console power unit: they hold dangerous charge even when unplugged."
+  ],
+  "symptoms": [
+    {
+      "id": "storage_full",
+      "title": "Storage is full or apps won't install",
+      "steps": [
+        {
+          "do": "Open Settings > Storage (Android) or Settings > General > iPhone Storage and see what uses the most space.",
+          "why": "Shows the biggest space users so you clear the right thing.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Delete or offload apps you don't use, and clear large message attachments and downloaded videos.",
+          "why": "Media and old apps are usually most of the space.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Back up photos to a computer or cloud, then remove them from the phone.",
+          "why": "Photos and videos are often the largest category.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Restart the phone.",
+          "why": "Frees temporary files the system holds on to.",
+          "needs": "nothing"
+        }
+      ],
+      "stop_if": [
+        "Storage still shows full after deleting files and restarting"
+      ]
+    },
+    {
+      "id": "battery_drains",
+      "title": "Battery drains fast",
+      "steps": [
+        {
+          "do": "Check Settings > Battery for the apps using the most battery.",
+          "why": "One misbehaving app is a common cause.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Check battery health: Settings > Battery > Battery Health (iPhone) or the maker's battery/device care page (many Android phones).",
+          "why": "Below about 80% of original capacity, runtime drops noticeably.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Lower screen brightness, turn on battery saver/Low Power Mode, and update the system.",
+          "why": "Screen and old software are big drains.",
+          "needs": "nothing"
+        },
+        {
+          "do": "If health is low, get the battery replaced by the maker or a repair shop.",
+          "why": "A worn battery can't be fixed with settings.",
+          "needs": "part"
+        }
+      ],
+      "stop_if": [
+        "The back or screen is lifting or bulging",
+        "The phone gets hot while idle",
+        "It shuts off at 20-30% charge"
+      ]
+    },
+    {
+      "id": "not_charging",
+      "title": "Won't charge or charges slowly",
+      "steps": [
+        {
+          "do": "Try a different cable, charger and wall outlet.",
+          "why": "Cables fail far more often than phones.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Power off and gently remove lint from the charging port with a wooden or plastic toothpick. Never metal.",
+          "why": "Pocket lint packed in the port stops the plug seating fully.",
+          "needs": "tool"
+        },
+        {
+          "do": "Restart the phone and check for system updates.",
+          "why": "Charging is managed by software too.",
+          "needs": "nothing"
+        }
+      ],
+      "stop_if": [
+        "The port is wet or corroded",
+        "The phone or charger gets very hot",
+        "It still won't charge with a known-good cable after cleaning"
+      ]
+    },
+    {
+      "id": "slow",
+      "title": "Phone is slow or freezes",
+      "steps": [
+        {
+          "do": "Restart the phone.",
+          "why": "Clears stuck apps and memory.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Free storage until at least 10-15% is empty.",
+          "why": "A nearly full phone slows down.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Update the system and apps; remove apps you don't recognise.",
+          "why": "Fixes bugs and removes heavy background apps.",
+          "needs": "nothing"
+        },
+        {
+          "do": "As a last resort, back up and factory reset.",
+          "why": "Clears software problems without touching hardware.",
+          "needs": "nothing"
+        }
+      ],
+      "stop_if": [
+        "Still freezing right after a factory reset (likely hardware)"
+      ]
+    },
+    {
+      "id": "overheating",
+      "title": "Phone gets hot",
+      "steps": [
+        {
+          "do": "Remove the case, stop gaming or charging, and let it cool out of direct sun.",
+          "why": "Heat plus charging is the usual cause.",
+          "needs": "nothing"
+        },
+        {
+          "do": "Check Settings > Battery for an app using lots of power in the background.",
+          "why": "Stuck apps keep the processor busy.",
+          "needs": "nothing"
+        }
+      ],
+      "stop_if": [
+        "It's hot while idle and not charging",
+        "The battery is swelling",
+        "There is a burning smell"
+      ]
+    }
+  ]
+}
