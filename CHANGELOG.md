@@ -10,7 +10,7 @@ All notable changes to this project are documented here.
 ## v1.0.0 (2026-11-02)
 
 First complete edition: everything finished and tested so far, plus the Microsoft Store version.
-Planned features move to v1.1.0 and later (see the README roadmap).
+Future updates may add more.
 
 
 - Light/dark report theme: the HTML report has a new green "health check" look with a light and a

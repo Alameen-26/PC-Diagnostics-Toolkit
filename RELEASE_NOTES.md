@@ -11,9 +11,7 @@ Released: 2026-11-02. The first complete edition. It finds what is slowing your 
 - **macOS and Linux** (from source): the scan fills in battery health, drive type and health, graphics and more using built-in tools.
 - **Microsoft Store version** on the way, with a `pcdiag` command that works in any terminal.
 
-## Coming next
-
-v1.1.0 (January 2027): scan history and "what changed since last time", an IT-support ticket export, and optional feedback saved on your PC.
+Future updates may add more.
 
 Copyright (c) NiyiSoft. All rights reserved.
 

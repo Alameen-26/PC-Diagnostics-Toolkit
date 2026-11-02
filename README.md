@@ -220,24 +220,14 @@ commands, so check them before sharing.
 
 ## Roadmap
 
-One release every two months. The old roadmap items are folded into the releases below.
-
-<!-- Changed in v1.0.0: v1.0.0 released; later items moved to v1.1.0 and up -->
-- **v0.3.0 (released 2026-11-02) - Make my PC better without buying a new one:** one free -> cheap -> replace
-  plan; upgrade compatibility; guided troubleshooting by symptom.
-- **v1.0.0 (released 2026-11-02) - Complete first edition:** light/dark HTML report theme; macOS and
-  Linux support; phone and console repair guides; double-click launch that opens the report; the
+<!-- Changed in v1.0.0 -->
+- **v0.3.0 (2026-11-02):** one free -> cheap -> replace plan; upgrade compatibility; guided
+  troubleshooting by symptom.
+- **v1.0.0 (2026-11-02) - Complete first edition:** light/dark HTML report theme; macOS and Linux
+  support; phone and console repair guides; double-click launch that opens the report; the
   Microsoft Store version.
-- **v1.1.0 (January 2027) - Remember and hand off:** automatic scan history and baselines
-  ("what changed since last time"); an IT-support ticket export; optional post-scan feedback saved
-  locally.
-- **v1.2.0 (March 2027) - Show the working:** a "Why this score" breakdown with per-area
-  subscores, `METHODOLOGY.md` and a no-scareware charter; crash evidence from the Event Log and
-  Reliability Monitor, with a memory-test hint; a benchmark context guard (battery, power plan,
-  pending Windows updates); `--redact`, `NO_COLOR`/`--plain` and accessibility fixes.
-- **v1.3.0 (May 2027) - See it at a glance:** a local, offline dashboard with history charts; an
-  optional short stress and throttle test; a multi-PC summary from a folder of snapshots.
-- **Later:** a web troubleshooter and an Android app built on the same repair guides.
+
+Future updates may add more.
 
 ## License
 
