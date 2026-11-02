@@ -11,6 +11,9 @@ All notable changes to this project are documented here.
 
 Theme: make my PC better without buying a new one. Advice only: pcdiag never changes settings or buys anything.
 
+- Download: free portable Windows .exe (Windows 10/11 x64) on the GitHub Releases page, built and
+  smoke-tested by the new `release-exe` workflow (`packaging/exe_launcher.py`). README has a Download section.
+
 - Docs: Quick start section added to the top of the README (2026-10-23). Step-by-step Windows
   PowerShell guide: prerequisites, clone, virtual environment (with the execution-policy tip),
   install, tests, scan options, where reports go, when to use Administrator, demos and compare.

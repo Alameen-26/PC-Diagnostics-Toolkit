@@ -1,0 +1,91 @@
+# Builds the portable Windows .exe and publishes it as a GitHub Release.
+#
+# Run it from the Actions tab ("Run workflow") with the version, e.g. v0.3.0,
+# or push a tag like v0.4.0. It builds a one-file console app with PyInstaller,
+# smoke-tests it, writes a SHA256 checksum and creates (or updates) the release.
+# Free on public repositories.
+#
+# Added in v0.3.0
+name: release-exe
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag, e.g. v0.3.0"
+        required: true
+        default: "v0.3.0"
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write  # needed to create the tag and the release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ github.event.inputs.version || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install . pyinstaller
+
+      - name: Build the exe
+        shell: pwsh
+        run: |
+          $name = "PCDiagnosticsToolkit-$env:VERSION-windows-x64"
+          pyinstaller --onefile --console --clean --name $name `
+            --collect-submodules pcdiag packaging/exe_launcher.py
+          "EXE_NAME=$name.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $exe = "dist\$env:EXE_NAME"
+          & $exe --version; if ($LASTEXITCODE) { exit 1 }
+          & $exe --help; if ($LASTEXITCODE) { exit 1 }
+          & $exe demo slow_old_laptop --no-save; if ($LASTEXITCODE) { exit 1 }
+          & $exe plan --demo failing_disk_machine --no-save; if ($LASTEXITCODE) { exit 1 }
+          & $exe scan --quick --json | Out-Null; if ($LASTEXITCODE) { exit 1 }
+
+      - name: Checksum and release notes
+        shell: pwsh
+        run: |
+          $exe = "dist\$env:EXE_NAME"
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  $env:EXE_NAME" | Out-File -Encoding ascii "dist\$env:EXE_NAME.sha256"
+          $size = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+          $head = @"
+          ## Download (Windows 10/11, 64-bit)
+
+          **$env:EXE_NAME** ($size MB) is a portable app: no install, no Python needed. Download it and double-click it, or run it from PowerShell (for example ``.\$env:EXE_NAME plan``).
+
+          - **Windows may warn you.** The app isn't code-signed yet, so Microsoft Defender SmartScreen may say "Windows protected your PC". Click **More info**, then **Run anyway**.
+          - **Some checks need Administrator** (drive health, some battery and temperature details). Right-click the exe and choose **Run as administrator** for the full scan. Without it, those checks say what they couldn't read.
+          - Reports are saved in a ``reports`` folder next to where it runs.
+          - **SHA256:** ``$hash``. To check your download: ``Get-FileHash .\$env:EXE_NAME`` in PowerShell.
+
+          ---
+
+          "@
+          ($head -replace '(?m)^          ', '') + (Get-Content RELEASE_NOTES.md -Raw) | Out-File -Encoding utf8 dist\notes.md
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: PC Diagnostics Toolkit ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          body_path: dist/notes.md
+          files: |
+            dist/${{ env.EXE_NAME }}
+            dist/${{ env.EXE_NAME }}.sha256

@@ -13,6 +13,14 @@ A Python tool that explains **what is slowing a PC down**, spots **likely hardwa
 help**, with free fixes listed first. Windows first; cross-platform wherever
 [psutil](https://github.com/giampaolo/psutil) allows (tests run on Linux).
 
+<!-- Added in v0.3.0 -->
+## Download (Windows app, no Python needed)
+
+Get the free portable app from the [Releases page](https://github.com/Alameen-26/PC-Diagnostics-Toolkit/releases/latest):
+download `PCDiagnosticsToolkit-<version>-windows-x64.exe` and double-click it (Windows 10/11, 64-bit, no install).
+It isn't code-signed yet, so if SmartScreen warns, click **More info**, then **Run anyway**. Run it as
+Administrator for the full set of checks. The SHA256 checksum is listed with each release.
+
 ## Quick start (Windows PowerShell)
 
 **You need:** [Git](https://git-scm.com/download/win) and [Python 3.10 or newer](https://www.python.org/downloads/)
