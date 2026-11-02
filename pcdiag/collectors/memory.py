@@ -155,4 +155,8 @@ def collect(snapshot: SystemSnapshot) -> MemoryInfo:
                 setattr(info, key, value)
         else:
             snapshot.add_error("memory", "RAM module details unavailable: " + ("; ".join(errors) or "no data"))
+    elif _shell.is_macos():  # Added in v1.0.0: system_profiler needs no admin on a Mac
+        from .unix_extras import mac_memory
+        for key, value in mac_memory().items():
+            setattr(info, key, value)
     return info

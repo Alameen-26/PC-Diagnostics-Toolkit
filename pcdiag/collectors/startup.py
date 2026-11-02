@@ -136,7 +136,12 @@ def collect_linux(autostart_dir: Optional[Path] = None) -> list[StartupItem]:
 def collect(snapshot: SystemSnapshot) -> list[StartupItem]:
     """Collect startup items for this platform."""
     try:
-        return collect_windows() if _shell.is_windows() else collect_linux()
+        if _shell.is_windows():
+            return collect_windows()
+        if _shell.is_macos():  # Added in v1.0.0
+            from .unix_extras import mac_startup
+            return mac_startup()
+        return collect_linux()
     except Exception as exc:
         snapshot.add_error("startup", f"startup items unavailable: {exc}")
         return []

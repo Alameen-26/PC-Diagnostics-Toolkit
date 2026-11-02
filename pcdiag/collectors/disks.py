@@ -42,7 +42,8 @@ _HEALTH = {"healthy": SmartStatus.OK, "0": SmartStatus.OK,
 _SEVERITY = {SmartStatus.UNKNOWN: 0, SmartStatus.OK: 1, SmartStatus.WARNING: 2, SmartStatus.FAILING: 3}
 
 # Linux pseudo/readonly filesystems that aren't real user storage.
-_SKIP_FSTYPES = {"squashfs", "tmpfs", "devtmpfs", "iso9660", "udf", "ramfs"}
+_SKIP_FSTYPES = {"squashfs", "tmpfs", "devtmpfs", "iso9660", "udf", "ramfs",
+                 "devfs", "autofs"}  # Changed in v1.0.0: macOS pseudo filesystems
 
 # One PowerShell call gathers physical disks, their reliability counters and
 # the drive-letter -> disk-number map. Reliability counters are wrapped in
@@ -263,7 +264,10 @@ def _list_partitions(snapshot: SystemSnapshot) -> list:
         # "cdrom" in opts = optical drive. Neither is real storage.
         if not p.fstype or "cdrom" in (p.opts or "") or p.fstype.lower() in _SKIP_FSTYPES:
             continue
-        if p.mountpoint.startswith(("/snap/", "/boot/efi")):
+        # Changed in v1.0.0: macOS splits the system disk into hidden helper
+        # volumes under /System/Volumes (Data, VM, Preboot...). They share
+        # the same space as "/", so listing them would count it twice.
+        if p.mountpoint.startswith(("/snap/", "/boot/efi", "/System/Volumes/", "/private/var/vm")):
             continue
         # Linux containers bind-mount the same device in many places
         # (/etc/hosts etc.). Keep one mount per device, preferring "/".
@@ -291,7 +295,12 @@ def collect(snapshot: SystemSnapshot, use_smartctl: bool = True) -> list[DiskInf
         except Exception as exc:  # e.g. BitLocker-locked or disconnected drive
             snapshot.add_error("disks", f"usage for {p.mountpoint} unavailable: {exc}")
         disk.is_system_drive = p.mountpoint.lower() == system_mp
-        if not _shell.is_windows():
+        if _shell.is_macos():  # Added in v1.0.0: diskutil gives type and health
+            from .unix_extras import mac_disk
+            mac = mac_disk(p.device)
+            if mac:
+                disk.kind, disk.bus_type, disk.model, disk.smart = mac
+        elif not _shell.is_windows():
             disk.kind, disk.model = _linux_disk_kind(p.device)
         disks.append(disk)
 

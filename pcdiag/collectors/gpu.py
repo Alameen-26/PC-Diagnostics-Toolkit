@@ -116,12 +116,18 @@ def collect(snapshot: SystemSnapshot) -> list[GPUInfo]:
         gpus = parse_win32_video(_shell.run_powershell_json(_PS_GPU, on_error=errors.append))
         if not gpus:
             snapshot.add_error("gpu", "Win32_VideoController unavailable: " + ("; ".join(errors) or "no data"))
+    elif _shell.is_macos():  # Added in v1.0.0
+        from .unix_extras import mac_gpus
+        gpus = mac_gpus()
     smi = _shell.which("nvidia-smi")
     if smi:
         out = _shell.run_command([smi, f"--query-gpu={_NVIDIA_QUERY}", "--format=csv,noheader,nounits"],
                                  timeout=10, on_error=errors.append)
         if out:
             gpus = _merge_nvidia(gpus, parse_nvidia_smi(out))
+    if not gpus and _shell.is_linux():  # Added in v1.0.0: card names from lspci
+        from .unix_extras import linux_gpus
+        gpus = linux_gpus()
     if not gpus and not _shell.is_windows():
-        snapshot.add_error("gpu", "no GPU details on this platform (only nvidia-smi is supported outside Windows)")
+        snapshot.add_error("gpu", "no GPU details found (tried system_profiler / lspci / nvidia-smi)")
     return gpus
