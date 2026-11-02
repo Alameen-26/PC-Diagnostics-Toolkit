@@ -1,3 +1,11 @@
+<!-- Added in v0.2.0: "Made by NiyiSoft" mark (switches to the light version in dark mode) -->
+<p align="right">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/niyisoft-badge-light.svg">
+    <img src="docs/brand/niyisoft-badge.svg" alt="Made by NiyiSoft" width="140">
+  </picture>
+</p>
+
 # PC Diagnostics Toolkit
 
 A Python tool that explains **what is slowing a PC down**, spots **likely hardware faults**
@@ -30,7 +38,8 @@ and run `.\.venv\Scripts\Activate.ps1` before using the tool.
 pytest -q
 ```
 
-You should see about 149 tests pass.
+<!-- Changed in v0.3.0: test count -->
+You should see about 365 tests pass.
 
 **3. Scan your PC**
 
@@ -39,6 +48,7 @@ python -m pcdiag scan               # normal scan, about 5 s
 python -m pcdiag scan --benchmark   # also run a ~20 s speed test
 python -m pcdiag scan --quick       # faster, noisier sampling; skips smartctl
 python -m pcdiag scan --json > snap.json   # raw data only, saves no report files
+python -m pcdiag scan --monitor 300 # watch the PC for 5 minutes first, then scan
 ```
 
 `pcdiag` on its own is a shortcut for `python -m pcdiag scan`. Other scan options:
@@ -78,6 +88,43 @@ python -m pcdiag compare reports\snapshot-20261001-090000.json reports\snapshot-
 
 Use your own file names from the `reports` folder: older scan first, newer scan second.
 
+**7. Watch your PC live** (CPU, RAM, disk space and the busiest programs, refreshed every 2 s)
+
+```powershell
+python -m pcdiag monitor                    # 60 s, then a summary
+python -m pcdiag monitor --duration 0       # run until you press Ctrl+C
+python -m pcdiag monitor --duration 300 --interval 5
+python -m pcdiag demo slow_old_laptop --monitor   # example report with 5 minutes of readings
+```
+
+Each run saves `reports\monitor-YYYYmmdd-HHMMSS.json` (`--no-save` to skip, `--json` to print it).
+Readings Windows can't provide (for example CPU temperature) show as "unavailable", never as 0.
+Run PowerShell as Administrator to include system processes in the busiest-programs list.
+`scan --monitor 300` is the best way to catch problems that come and go: the report then tells
+short spikes apart from constant load.
+
+<!-- Added in v0.3.0: plan and troubleshoot -->
+**8. Get your improvement plan** (free fixes first, then cheap upgrades; advice only)
+
+```powershell
+python -m pcdiag plan                          # scan, then a step-by-step plan
+python -m pcdiag plan --monitor                # watch for 5 minutes first (more reliable)
+python -m pcdiag plan --demo slow_old_laptop   # example plan, no scanning
+```
+
+Each plan step says why, what pcdiag saw, roughly what it costs and whether an upgrade fits your
+PC ("Fits?": yes, no or can't tell). It saves `reports\plan-YYYYmmdd-HHMMSS.md`
+(`--no-save` to skip, `--json` to print it, `--snapshot FILE` to plan from an earlier scan).
+The same plan appears in the HTML report.
+
+**9. Troubleshoot a symptom** (ordered checks with clear stop points)
+
+```powershell
+python -m pcdiag troubleshoot slow-boot --scan   # also: restarts, freezes, overheating, disk-noise
+```
+
+`--scan` checks this PC first and marks the steps it found evidence for.
+
 ## Features
 
 - **Live scan** of CPU (model, cores, clocks, ~1 s usage sample), RAM and swap
@@ -90,6 +137,15 @@ Use your own file names from the `reports` folder: older scan first, newer scan 
 - **Analysis**: 16 rules turn the data into plain-language findings (RAM pressure, hard-disk
   boot drive, full disks, failing drives, thermal throttling, too many startup apps, old GPU
   driver, worn battery, ...). Missing data is never reported as healthy.
+<!-- Added in v0.3.0 -->
+- **Improvement plan** (`pcdiag plan`): free fixes (startup apps, heavy programs, disk cleanup,
+  graphics driver, power plan, Windows Update, cooling), then cheap upgrades, then a replacement
+  only when upgrades can't help. Urgent steps (back up a failing drive) come first.
+- **Upgrade compatibility**: soldered vs socketed RAM, maximum RAM, free slots, stick size,
+  SATA vs NVMe, drive size, laptop vs desktop. Impossible upgrades are never suggested; unknowns
+  say "can't tell".
+- **Troubleshooting by symptom** (`pcdiag troubleshoot`): slow boot, restarts, freezes,
+  overheating, drive noises.
 - **Upgrade recommender** ranks purchases by expected impact (failing disk first and marked
   urgent, then HDD -> SSD, RAM, bigger drive, battery, GPU).
 - **Reports**: a terminal summary with a verdict and a 0-100 health score, a self-contained
@@ -112,6 +168,9 @@ checks only show more detail when run from **"Run as administrator"** PowerShell
 
 When something can't be read, the scan says so under "Not collected / limited" rather than
 guessing. Per-core CPU temperatures on Windows need a kernel driver and are not supported.
+<!-- Added in v0.3.0 -->
+If [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) is running,
+pcdiag reads its CPU temperature sensors (no admin needed for pcdiag itself).
 
 ## Privacy
 
@@ -125,7 +184,9 @@ commands, so check them before sharing.
 - `pcdiag/models.py`: dataclasses for every metric, with JSON round-tripping
 - `pcdiag/collectors/`: one module per area; never raise, record problems in `snapshot.errors`.
   All PowerShell/external commands go through `collectors/_shell.py`.
-- `pcdiag/analysis/`: rules, findings and the upgrade recommender
+- `pcdiag/analysis/`: rules, findings, the upgrade recommender, upgrade compatibility
+  (`compat.py`) and the improvement plan (`plan.py`) <!-- Changed in v0.3.0 -->
+- `pcdiag/troubleshoot.py`: symptom guides <!-- Added in v0.3.0 -->
 - `pcdiag/report/`: HTML and Markdown renderers
 - `pcdiag/benchmark.py`, `pcdiag/compare.py`, `pcdiag/terminal.py`, `pcdiag/__main__.py` (CLI)
 - `pcdiag/fixtures.py`: example snapshots (healthy gaming PC, slow old laptop, failing disk)
@@ -133,13 +194,21 @@ commands, so check them before sharing.
 
 ## Roadmap
 
-- Soldered vs socketed RAM detection (so we don't suggest adding RAM to a laptop that can't take it)
-- Desktop vs "no battery detected" detection
-- Averaging readings over time (several samples instead of one snapshot)
-- Latest-GPU-driver check (compare against the vendor's current release)
-- Windows power plan check (e.g. "Power saver" on a desktop)
-- Pending Windows updates
-- CPU-sensor flag on temperature readings (tell CPU sensors apart from board/ACPI zones)
+One release every two months. The old roadmap items are folded into the releases below.
+
+<!-- Changed in v0.3.0: marked released -->
+- **v0.3.0 (released 2026-11-02) - Make my PC better without buying a new one:** one free -> cheap -> replace
+  plan; upgrade compatibility (soldered vs socketed RAM, max RAM, free slots, desktop vs no battery);
+  guided troubleshooting by symptom; CPU-sensor flag on temperatures and a GPU-driver age check.
+- **v0.4.0 (January 2027) - Remember and hand off:** automatic scan history and baselines
+  ("what changed since last time"); an IT-support ticket export; optional post-scan feedback saved
+  locally; a portable `.exe` with a checksum.
+- **v0.5.0 (March 2027) - Show the working:** a "Why this score" breakdown with per-area
+  subscores, `METHODOLOGY.md` and a no-scareware charter; crash evidence from the Event Log and
+  Reliability Monitor, with a memory-test hint; a benchmark context guard (battery, power plan,
+  pending Windows updates); `--redact`, `NO_COLOR`/`--plain` and accessibility fixes.
+- **v0.6.0 (May 2027) - See it at a glance:** a local, offline dashboard with history charts; an
+  optional short stress and throttle test; a multi-PC summary from a folder of snapshots.
 
 ## License
 
