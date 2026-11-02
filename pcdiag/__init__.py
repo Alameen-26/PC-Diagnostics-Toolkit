@@ -6,4 +6,4 @@ upgrade advice), ``report`` (HTML/Markdown). Data models live in
 
 Added in v0.1.0
 """
-__version__ = "0.1.0"
+__version__ = "0.3.0"  # Changed in v0.3.0

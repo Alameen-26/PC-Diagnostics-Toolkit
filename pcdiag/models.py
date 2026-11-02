@@ -16,7 +16,10 @@ Conventions
 * Optional fields may be added in later versions; existing fields are never
   renamed or removed within a schema version (``SCHEMA_VERSION``).
 
-Added in v0.1.0
+Added in v0.1.0. v0.2.0 added the live-monitoring models (MonitorSession and
+friends) and the optional ``SystemSnapshot.monitor`` field. v0.3.0 added
+``DeviceInfo``, ``SoftwareState``, RAM compatibility fields and the
+``TemperatureReading.is_cpu`` flag (all optional; old files still load).
 """
 from __future__ import annotations
 
@@ -55,6 +58,13 @@ class SmartStatus(str, Enum):
 # Serialization helpers
 # --------------------------------------------------------------------------
 
+# Explained in v0.3.0: why dataclasses? Each model is just named fields with types, so a
+# dataclass gives us __init__, __repr__ and equality for free. The two helpers
+# below walk those fields recursively, which is how any snapshot can be saved
+# to JSON (``to_json``) and loaded back (``from_json``) without hand-writing a
+# converter per class. That JSON file is what ``pcdiag compare`` diffs later.
+# Key rule: a reading we couldn't get is None, never 0. A 0 would look like a
+# real measurement ("0% CPU") and could make a broken PC look healthy.
 def _to_jsonable(value: Any) -> Any:
     """Recursively convert dataclasses, enums and datetimes to JSON-safe values."""
     if isinstance(value, Enum):
@@ -176,6 +186,9 @@ class MemoryModule(Model):
     speed_mhz: Optional[int] = None
     type: Optional[str] = None             # "DDR4", "DDR5"
     manufacturer: Optional[str] = None
+    # Added in v0.3.0: physical package from Win32_PhysicalMemory.FormFactor
+    # ("DIMM", "SODIMM", "soldered", ...). None = not reported.
+    form_factor: Optional[str] = None
 
 
 @dataclass
@@ -194,6 +207,10 @@ class MemoryInfo(Model):
     speed_mhz: Optional[int] = None
     type: Optional[str] = None             # "DDR4", "DDR5", ...
     modules: list[MemoryModule] = field(default_factory=list)
+    # Added in v0.3.0 (upgrade compatibility). All None = "can't tell".
+    max_capacity_gb: Optional[float] = None  # Win32_PhysicalMemoryArray MaxCapacity(Ex); firmware-reported
+    form_factor: Optional[str] = None        # "DIMM" (desktop stick), "SODIMM" (laptop stick), "soldered"
+    soldered: Optional[bool] = None          # True = on the motherboard (can't add/replace); None = unknown
 
 
 @dataclass
@@ -264,6 +281,10 @@ class TemperatureReading(Model):
     high_c: Optional[float] = None
     critical_c: Optional[float] = None
     sensor: Optional[str] = None           # psutil group name, e.g. "coretemp"
+    # Added in v0.3.0: True = a real CPU sensor (e.g. LibreHardwareMonitor
+    # "CPU Package", coretemp, k10temp); False = something else (ACPI zone,
+    # board, NVMe); None = can't tell from the label.
+    is_cpu: Optional[bool] = None
 
 
 @dataclass
@@ -310,12 +331,282 @@ class BenchmarkResult(Model):
 
 
 # --------------------------------------------------------------------------
+# Live monitoring (time series)
+# Added in v0.2.0 (roadmap phase 2: live monitoring). A MonitorSession is a
+# series of MonitorSample readings taken every ``interval_seconds``. The
+# sustained-pressure rules in pcdiag.analysis (phase 4) read it through the
+# helper methods below, so their names are a contract: don't rename them.
+# --------------------------------------------------------------------------
+
+@dataclass
+class DiskUsageSample(Model):
+    """Free space on one fixed disk at one moment. Added in v0.2.0."""
+    mountpoint: str = ""                   # "C:\\", "/"
+    total_gb: Optional[float] = None
+    free_gb: Optional[float] = None
+    used_percent: Optional[float] = None
+
+
+@dataclass
+class MonitorSample(Model):
+    """One reading of the live monitor. ``None`` = not readable this time (see ``notes``).
+
+    Added in v0.2.0.
+    """
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    elapsed_seconds: float = 0.0           # seconds since the session started
+    cpu_percent: Optional[float] = None    # whole CPU, 0-100
+    per_core_percent: list[float] = field(default_factory=list)
+    ram_percent: Optional[float] = None
+    ram_used_gb: Optional[float] = None
+    ram_available_gb: Optional[float] = None
+    swap_percent: Optional[float] = None
+    disks: list[DiskUsageSample] = field(default_factory=list)  # fixed disks only
+    # Shortcuts for the OS drive (also in ``disks``), so rules that only care
+    # about the system drive don't need to know its mountpoint.
+    system_disk_free_gb: Optional[float] = None
+    system_disk_used_percent: Optional[float] = None
+    cpu_temp_c: Optional[float] = None     # hottest CPU sensor; usually None on Windows
+    disk_read_mbps: Optional[float] = None   # all disks combined
+    disk_write_mbps: Optional[float] = None
+    disk_busy_percent: Optional[float] = None  # busiest disk; None on Windows (no busy_time in psutil)
+    top_cpu: list[ProcessInfo] = field(default_factory=list)     # cpu_percent is % of ONE core
+    top_memory: list[ProcessInfo] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)  # what was unavailable in this sample
+
+    def metric(self, name: str) -> Optional[float]:
+        """Value of a metric by name (see ``MonitorSession.values``), or None if unknown."""
+        if name.startswith("disk_used_percent:"):
+            mount = name.split(":", 1)[1]
+            disk = next((d for d in self.disks if d.mountpoint == mount), None)
+            return disk.used_percent if disk else None
+        if name in _SAMPLE_METRICS:
+            return getattr(self, name)
+        raise KeyError(f"unknown monitor metric: {name!r}")
+
+
+#: Scalar metrics a MonitorSample exposes by name. Added in v0.2.0.
+_SAMPLE_METRICS = ("cpu_percent", "ram_percent", "swap_percent", "disk_busy_percent",
+                   "disk_read_mbps", "disk_write_mbps", "system_disk_free_gb",
+                   "system_disk_used_percent", "cpu_temp_c")
+
+
+@dataclass
+class MetricStats(Model):
+    """Summary of one metric over a session (``MonitorSession.stats``). Added in v0.2.0."""
+    metric: str = ""
+    threshold: Optional[float] = None
+    count: int = 0                         # samples with a known value
+    missing: int = 0                       # samples where the value was None
+    mean: Optional[float] = None
+    min: Optional[float] = None
+    max: Optional[float] = None
+    p95: Optional[float] = None
+    percent_above: Optional[float] = None  # only when threshold is given
+    longest_streak_seconds: float = 0.0
+    longest_streak_samples: int = 0
+
+
+@dataclass
+class ProcessSummary(Model):
+    """One process name aggregated over a session (``MonitorSession.process_summary``). Added in v0.2.0."""
+    name: str = ""
+    samples_seen: int = 0                  # samples where it was in the top list
+    mean_cpu_percent: Optional[float] = None   # averaged over samples_seen
+    max_cpu_percent: Optional[float] = None
+    mean_memory_mb: Optional[float] = None
+    max_memory_mb: Optional[float] = None
+
+
+def _p95(values: list[float]) -> Optional[float]:
+    """95th percentile by the nearest-rank method (no interpolation). Added in v0.2.0."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    rank = max(1, -(-95 * len(ordered) // 100))  # ceil(0.95 * n), 1-based
+    return ordered[rank - 1]
+
+
+@dataclass
+class MonitorSession(Model):
+    """A live-monitoring run: samples plus summary helpers for the sustained rules.
+
+    Metric names accepted by the helpers: ``cpu_percent``, ``ram_percent``,
+    ``swap_percent``, ``disk_busy_percent``, ``disk_read_mbps``,
+    ``disk_write_mbps``, ``system_disk_free_gb``, ``system_disk_used_percent``,
+    ``cpu_temp_c`` and ``disk_used_percent:<mountpoint>``.
+    Unknown (None) readings are skipped by the statistics, counted by
+    ``missing_count`` and break a streak, so missing data is never treated
+    as "fine" or "bad".
+
+    Added in v0.2.0.
+    """
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    ended_at: Optional[datetime] = None
+    interval_seconds: float = 2.0
+    requested_duration_seconds: Optional[float] = None  # None = until Ctrl+C
+    interrupted: bool = False              # stopped early with Ctrl+C
+    hostname: Optional[str] = None
+    logical_cores: Optional[int] = None
+    ram_total_gb: Optional[float] = None
+    samples: list[MonitorSample] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)  # session-level "unavailable" notes (deduplicated)
+
+    @property
+    def sample_count(self) -> int:
+        """Number of samples taken."""
+        return len(self.samples)
+
+    @property
+    def duration_seconds(self) -> float:
+        """Wall-clock length of the session; falls back to the last sample's elapsed time."""
+        if self.ended_at is not None:
+            return max(0.0, (self.ended_at - self.started_at).total_seconds())
+        return self.samples[-1].elapsed_seconds if self.samples else 0.0
+
+    def values(self, metric: str) -> list[float]:
+        """Known values of ``metric`` in sample order (None readings skipped)."""
+        return [v for v in (s.metric(metric) for s in self.samples) if v is not None]
+
+    def missing_count(self, metric: str) -> int:
+        """How many samples had no reading for ``metric``."""
+        return sum(1 for s in self.samples if s.metric(metric) is None)
+
+    def mean(self, metric: str) -> Optional[float]:
+        """Average of the known values, or None if there are none."""
+        vals = self.values(metric)
+        return sum(vals) / len(vals) if vals else None
+
+    def max(self, metric: str) -> Optional[float]:
+        """Highest known value, or None."""
+        vals = self.values(metric)
+        return max(vals) if vals else None
+
+    def min(self, metric: str) -> Optional[float]:
+        """Lowest known value, or None."""
+        vals = self.values(metric)
+        return min(vals) if vals else None
+
+    def p95(self, metric: str) -> Optional[float]:
+        """95th percentile (nearest rank) of the known values, or None."""
+        return _p95(self.values(metric))
+
+    def percent_above(self, metric: str, threshold: float) -> Optional[float]:
+        """Percent (0-100) of known samples with value >= ``threshold``; None if no data."""
+        vals = self.values(metric)
+        if not vals:
+            return None
+        return 100.0 * sum(1 for v in vals if v >= threshold) / len(vals)
+
+    def _longest_run(self, metric: str, threshold: float) -> int:
+        """Longest run of consecutive samples with value >= threshold. None breaks the run."""
+        best = run = 0
+        for s in self.samples:
+            v = s.metric(metric)
+            run = run + 1 if v is not None and v >= threshold else 0
+            best = max(best, run)
+        return best
+
+    def longest_streak_above(self, metric: str, threshold: float) -> float:
+        """Longest continuous time (seconds) at or above ``threshold``: run length x interval."""
+        return self._longest_run(metric, threshold) * self.interval_seconds
+
+    def stats(self, metric: str, threshold: Optional[float] = None) -> MetricStats:
+        """All summary numbers for one metric in one object."""
+        vals = self.values(metric)
+        run = self._longest_run(metric, threshold) if threshold is not None else 0
+        return MetricStats(
+            metric=metric, threshold=threshold, count=len(vals), missing=self.missing_count(metric),
+            mean=self.mean(metric), min=self.min(metric), max=self.max(metric), p95=self.p95(metric),
+            percent_above=self.percent_above(metric, threshold) if threshold is not None else None,
+            longest_streak_seconds=run * self.interval_seconds, longest_streak_samples=run,
+        )
+
+    def mountpoints(self) -> list[str]:
+        """Fixed-disk mountpoints seen in any sample, in first-seen order."""
+        seen: dict[str, None] = {}
+        for s in self.samples:
+            for d in s.disks:
+                seen.setdefault(d.mountpoint, None)
+        return list(seen)
+
+    def process_summary(self, by: str = "cpu", n: int = 5) -> list[ProcessSummary]:
+        """Top ``n`` process names across the session, sorted by mean CPU or mean memory.
+
+        A process is counted in a sample if it was in that sample's top_cpu
+        or top_memory list (deduplicated by pid). Means are over the samples
+        where it appeared, so ``samples_seen`` shows how persistent it was.
+        """
+        if by not in ("cpu", "memory"):
+            raise ValueError("by must be 'cpu' or 'memory'")
+        acc: dict[str, dict[str, list[float]]] = {}
+        for s in self.samples:
+            # Per sample, merge same-name processes (e.g. many chrome.exe).
+            per_name: dict[str, list[float]] = {}
+            seen_pids: set[int] = set()
+            for p in s.top_cpu + s.top_memory:
+                if p.pid in seen_pids:
+                    continue
+                seen_pids.add(p.pid)
+                cur = per_name.setdefault(p.name, [0.0, 0.0])
+                cur[0] += p.cpu_percent or 0.0
+                cur[1] += p.memory_mb or 0.0
+            for name, (cpu, mem) in per_name.items():
+                a = acc.setdefault(name, {"cpu": [], "mem": []})
+                a["cpu"].append(cpu)
+                a["mem"].append(mem)
+        out = [ProcessSummary(
+            name=name, samples_seen=len(a["cpu"]),
+            mean_cpu_percent=round(sum(a["cpu"]) / len(a["cpu"]), 1), max_cpu_percent=round(max(a["cpu"]), 1),
+            mean_memory_mb=round(sum(a["mem"]) / len(a["mem"]), 1), max_memory_mb=round(max(a["mem"]), 1),
+        ) for name, a in acc.items()]
+        key = (lambda r: r.mean_cpu_percent or 0) if by == "cpu" else (lambda r: r.mean_memory_mb or 0)
+        return sorted(out, key=key, reverse=True)[:n]
+
+
+# --------------------------------------------------------------------------
 # Aggregate
 # --------------------------------------------------------------------------
 
 def _now() -> datetime:
     """Current time in UTC (default for ``SystemSnapshot.timestamp``)."""
     return datetime.now(timezone.utc)
+
+
+@dataclass
+class DeviceInfo(Model):
+    """What kind of computer this is (Win32_SystemEnclosure / Win32_ComputerSystem).
+
+    Added in v0.3.0. Used to keep upgrade advice possible: a desktop takes
+    DIMMs and 3.5" drives, a laptop SODIMMs and 2.5"/M.2 drives.
+    """
+    chassis: Optional[str] = None          # "laptop", "desktop", "all-in-one", "tablet", "server", "other"
+    chassis_types: list[int] = field(default_factory=list)  # raw SMBIOS codes
+    manufacturer: Optional[str] = None     # "LENOVO", "Dell Inc."
+    model: Optional[str] = None            # "20BV001UUS", "XPS 13 9310"
+
+    @property
+    def is_laptop(self) -> Optional[bool]:
+        """True for laptops/tablets/convertibles, False for desktops, None if unknown."""
+        if self.chassis in ("laptop", "tablet"):
+            return True
+        if self.chassis in ("desktop", "all-in-one", "server"):
+            return False
+        return None
+
+
+@dataclass
+class SoftwareState(Model):
+    """Power plan and Windows Update status. Added in v0.3.0; read-only.
+
+    Every field is None when it couldn't be read (non-Windows, or the
+    query failed); None is "can't tell", never "fine".
+    """
+    power_plan: Optional[str] = None       # "Balanced", "Power saver", "High performance", custom name
+    power_plan_guid: Optional[str] = None
+    last_update_installed: Optional[str] = None  # ISO date of the newest installed update (Get-HotFix)
+    days_since_update: Optional[int] = None      # relative to the snapshot timestamp
+    reboot_pending: Optional[bool] = None        # Windows Update / servicing wants a restart
 
 
 @dataclass
@@ -335,6 +626,14 @@ class SystemSnapshot(Model):
     startup_items: list[StartupItem] = field(default_factory=list)
     benchmark: Optional[BenchmarkResult] = None
     errors: list[str] = field(default_factory=list)  # "collector: reason"
+    # Added in v0.2.0: optional live-monitoring session (``scan --monitor S``
+    # or demo fixtures). None = no monitoring was done; older snapshot files
+    # without this key still load because missing keys take the default.
+    monitor: Optional[MonitorSession] = None
+    # Added in v0.3.0: chassis (laptop/desktop) and power plan / Windows
+    # Update state for the improvement plan. None = not collected.
+    device: Optional[DeviceInfo] = None
+    software: Optional[SoftwareState] = None
 
     @property
     def system_drive(self) -> Optional[DiskInfo]:
@@ -351,4 +650,8 @@ __all__ = [
     "OSInfo", "CPUInfo", "MemoryModule", "MemoryInfo", "SmartHealth", "DiskInfo",
     "DiskIOStats", "GPUInfo", "TemperatureReading", "BatteryInfo", "ProcessInfo",
     "StartupItem", "BenchmarkResult", "SystemSnapshot",
+    # Added in v0.2.0 (live monitoring)
+    "DiskUsageSample", "MonitorSample", "MetricStats", "ProcessSummary", "MonitorSession",
+    # Added in v0.3.0 (improvement plan)
+    "DeviceInfo", "SoftwareState",
 ]
