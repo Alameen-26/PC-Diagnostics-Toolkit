@@ -30,6 +30,13 @@ ErrorCallback = Optional[Callable[[str], None]]
 DEFAULT_PS_TIMEOUT = 20.0
 
 
+# Explained in v0.3.0: why one wrapper for every external command? Three reasons:
+# 1. Safety: commands are passed as a list of arguments (no shell string), with
+#    a timeout, so a hung PowerShell call can't freeze the whole scan.
+# 2. One error policy: return None plus a readable reason instead of raising,
+#    which matches the project rule that None means "unknown".
+# 3. Testability: tests replace these few functions (monkeypatch) with canned
+#    Windows output, which is how the Windows code paths run on Linux CI.
 def is_windows() -> bool:
     """Return True when running on Windows.
 

@@ -6,7 +6,9 @@ slots are filled, speed, DDR generation) come from the Windows CIM classes
 admin. On Linux the equivalent (``dmidecode``) needs root, so those fields
 are simply left as None there.
 
-Added in v0.1.0
+Added in v0.1.0. Changed in v0.3.0: also reads the stick form factor
+(DIMM / SODIMM / soldered) and the board's maximum RAM (MaxCapacity) for the
+upgrade-compatibility checks.
 """
 from __future__ import annotations
 
@@ -26,11 +28,29 @@ SMBIOS_MEMORY_TYPES = {
     27: "LPDDR", 28: "LPDDR2", 29: "LPDDR3", 30: "LPDDR4", 34: "DDR5", 35: "LPDDR5",
 }
 
+# Added in v0.3.0: Win32_PhysicalMemory.FormFactor (CIM codes). Chip
+# packages (TSOP, SMD, BGA, FPBGA, ...) mean the RAM is soldered to the board.
+FORM_FACTORS = {8: "DIMM", 12: "SODIMM", 11: "RIMM", 13: "SRIMM", 7: "SIMM", 6: "proprietary"}
+SOLDERED_FORM_FACTORS = {2, 3, 4, 5, 9, 10, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
+# LPDDR memory is always soldered (there are no LPDDR sticks), whatever FormFactor says.
+SOLDERED_TYPES = {"LPDDR", "LPDDR2", "LPDDR3", "LPDDR4", "LPDDR5"}
+
+
+def form_factor_name(code: Any, mem_type: Optional[str] = None) -> Optional[str]:
+    """CIM FormFactor code (+ DDR type) -> "DIMM" / "SODIMM" / "soldered" / None. Added in v0.3.0."""
+    if mem_type in SOLDERED_TYPES:
+        return "soldered"
+    c = to_int(code)
+    if c in SOLDERED_FORM_FACTORS:
+        return "soldered"
+    return FORM_FACTORS.get(c) if c is not None else None
+
+
 # One PowerShell round trip for both classes: each powershell.exe launch
 # costs about a second, so batching queries matters.
 _PS_MEMORY = r"""
-$m = @(Get-CimInstance Win32_PhysicalMemory | Select-Object BankLabel, DeviceLocator, Capacity, Speed, ConfiguredClockSpeed, SMBIOSMemoryType, Manufacturer)
-$a = @(Get-CimInstance Win32_PhysicalMemoryArray | Select-Object MemoryDevices, MaxCapacity, Use)
+$m = @(Get-CimInstance Win32_PhysicalMemory | Select-Object BankLabel, DeviceLocator, Capacity, Speed, ConfiguredClockSpeed, SMBIOSMemoryType, Manufacturer, FormFactor)
+$a = @(Get-CimInstance Win32_PhysicalMemoryArray | Select-Object MemoryDevices, MaxCapacity, MaxCapacityEx, Use)
 ConvertTo-Json -Depth 3 -Compress -InputObject @{ modules = $m; arrays = $a }
 """
 
@@ -54,22 +74,41 @@ def parse_windows_memory(data: Any) -> dict:
         speed = to_int(raw.get("ConfiguredClockSpeed")) or to_int(raw.get("Speed"))
         slot = raw.get("DeviceLocator") or raw.get("BankLabel")
         manufacturer = (raw.get("Manufacturer") or "").strip() or None
+        mem_type = SMBIOS_MEMORY_TYPES.get(to_int(raw.get("SMBIOSMemoryType")) or -1)
         modules.append(
             MemoryModule(
                 slot=str(slot).strip() if slot else None,
                 capacity_gb=bytes_to_gb(raw.get("Capacity"), 1),
                 speed_mhz=speed,
-                type=SMBIOS_MEMORY_TYPES.get(to_int(raw.get("SMBIOSMemoryType")) or -1),
+                type=mem_type,
                 manufacturer=manufacturer,
+                form_factor=form_factor_name(raw.get("FormFactor"), mem_type),  # Added in v0.3.0
             )
         )
 
     # Use == 3 means "system memory"; other arrays (e.g. flash, video) are
     # ignored. Older firmware leaves Use blank, so blank counts as system.
     slots_total = 0
+    max_kb = 0  # Added in v0.3.0
     for arr in _shell.as_list(data.get("arrays")):
         if isinstance(arr, dict) and to_int(arr.get("Use")) in (None, 3):
             slots_total += to_int(arr.get("MemoryDevices")) or 0
+            # Added in v0.3.0: MaxCapacity is in KB and tops out at ~4 TB;
+            # MaxCapacityEx (also KB) is used when larger. 0 = not reported.
+            cap = max(to_int(arr.get("MaxCapacityEx")) or 0, to_int(arr.get("MaxCapacity")) or 0)
+            max_kb += cap
+
+    # Added in v0.3.0: overall form factor / soldered flag. Mixed boards
+    # (some soldered + one slot) count as not fully soldered.
+    factors = {m.form_factor for m in modules if m.form_factor}
+    if factors == {"soldered"}:
+        form, soldered = "soldered", True
+    elif factors and "soldered" not in factors and len(factors) == 1:
+        form, soldered = next(iter(factors)), False
+    elif factors:
+        form, soldered = "mixed", False  # part soldered + part socketed, or mixed stick types
+    else:
+        form, soldered = None, None
 
     speeds = [m.speed_mhz for m in modules if m.speed_mhz]
     types = [m.type for m in modules if m.type]
@@ -80,6 +119,10 @@ def parse_windows_memory(data: Any) -> dict:
         # Mixed sticks run at the slowest one's speed.
         "speed_mhz": min(speeds) if speeds else None,
         "type": types[0] if types else None,
+        # Added in v0.3.0
+        "max_capacity_gb": round(max_kb / 1024 / 1024, 1) if max_kb else None,
+        "form_factor": form,
+        "soldered": soldered,
     }
 
 
